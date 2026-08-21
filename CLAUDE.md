@@ -61,18 +61,25 @@ La web permite marcar "revisado" y dejar notas por entrada — se guardan en
 (`PATCH /api/projects/:id/changes/:changeId`), no en el navegador.
 
 Cada tarjeta del timeline tiene un enlace **"Pantalla completa"** que lleva a
-`/p/:id/c/:changeId` — decisión explícita del cliente (21-ago-2026): el
-desplegable inline dentro de la tarjeta (`<details>` de ~340px) era "poco
-práctico" para leer archivo + explicación + cambios relacionados a la vez.
-La vista de pantalla completa es una página propia (`renderChangeDetailHtml`,
-`lib/render.mjs`): cabecera con posición (`N / total`), navegación
+`/p/:id/c/:changeId` — decisión explícita del cliente (21-ago-2026, dos
+vueltas): primero un desplegable inline (`<details>` de ~340px, "poco
+práctico"), luego una vista de pantalla completa con pestañas y todo
+centrado a 1120px ("no tengo espacio" y "no pude navegar en árbol por los
+archivos"). La versión actual (`renderChangeDetailHtml`, `lib/render.mjs`)
+es un split real, sin tope de ancho: **sidebar fija de 300px** (motivo +
+nota arriba, y debajo un **árbol de TODOS los archivos que ha tocado
+cualquier cambio del proyecto**, agrupado por carpeta — no solo los de este
+cambio) + **panel principal a todo el ancho restante** con el/los archivo(s)
+de este cambio, completos, apilados si son varios. El árbol resuelve lo de
+"leer los relacionados": cada archivo lista TODOS los cambios que lo tocan
+(con su título), no solo los de la entrada actual — clic en uno navega a
+ese cambio; clic en el propio cambio actual hace scroll a su sección sin
+recargar. Cabecera arriba: posición (`N / total`), navegación
 anterior/siguiente (⇦/⇨ de teclado también) para pasar de cambio en cambio
-sin volver al timeline, checkbox de revisado y nota arriba junto al motivo,
-y debajo un panel de archivo a toda altura (con pestañas si el cambio toca
-varios archivos). El primer archivo se renderiza en el propio HTML (carga
-inmediata); el resto se piden bajo demanda al cambiar de pestaña
-(`GET /api/projects/:id/changes/:changeId/files/:fileIndex`, mismo endpoint
-que antes usaba el `<details>`). Muestra el archivo **completo**, con
+sin volver al timeline, checkbox de revisado. Todos los archivos del cambio
+actual se renderizan de una vez en el propio HTML (nada de carga perezosa
+aquí — el endpoint `/files/:fileIndex` ya no lo usa esta vista, sigue vivo
+por si hace falta en otro sitio). Muestra el archivo **completo**, con
 números de línea y el rango cambiado resaltado, leído del **working tree
 actual** del repo (`repoPath` del proyecto) — no del commit histórico —
 porque `archivo:línea` en todo este sistema significa "así está HOY", igual
