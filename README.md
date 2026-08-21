@@ -1,9 +1,11 @@
 # Code Timeline
 
 Historial de cambios de código verificable en orden: por cada cambio, el
-método/clase/atributo que tocó, dónde está (archivo:línea), el código de
-antes en rojo y el de después en verde, y por qué. Cuando un cambio no tiene
-relación con el anterior, se marca el salto y se explica.
+método/clase/atributo que tocó, en qué archivo(s) — puede ser más de uno —,
+el código de antes en rojo y el de después en verde, y por qué. Cada archivo
+tiene un mini-editor desplegable con el archivo COMPLETO y la línea cambiada
+resaltada, leído en vivo del repo. Cuando un cambio no tiene relación con el
+anterior, se marca el salto y se explica.
 
 No sustituye a `git log` — lo complementa. Un commit agrupa varios cambios de
 una vez; aquí cada entrada es una unidad revisable de una sentada, en el
@@ -57,7 +59,7 @@ tú: "vincula este proyecto"
 Claude: link_project(name, repoPath) → guarda el projectId
 
 [Claude hace un cambio de código]
-Claude: add_change(projectId, { file, lineStart, unitName, before, after, explanation, ... })
+Claude: add_change(projectId, { files: [{ file, lineStart, before, after }, ...], unitName, explanation, ... })
 
 tú: "dame la web" / "levanta el timeline"
 Claude: code-timeline serve --port 4173 &   → te pasa http://localhost:4173

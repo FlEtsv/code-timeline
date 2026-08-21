@@ -48,7 +48,8 @@ switch (cmd) {
     const changes = listChanges(id, limit ? Number(limit) : undefined);
     if (!changes.length) { console.log('Sin cambios registrados aún.'); break; }
     for (const c of changes) {
-      console.log(`[${c.relation.type}] ${c.date}  ${c.file}${c.lineStart ? ':' + c.lineStart : ''}\n  ${c.title}\n`);
+      const files = (c.files || []).map((f) => f.file + (f.lineStart ? ':' + f.lineStart : '')).join(', ');
+      console.log(`[${c.relation.type}] ${c.date}  ${files}\n  ${c.title}\n`);
     }
     break;
   }

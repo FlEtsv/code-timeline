@@ -24,11 +24,15 @@ en cualquier proyecto, sin tener que abrir este repo. Herramientas:
   `projectId` (slug). Antes de vincular, comprueba con `list_projects` si ya
   existe uno para ese repo.
 - `add_change(projectId, {...})` — **después de cada cambio de código real**
-  que hagas (no de exploración/lectura). Campos: `file`, `lineStart`/`lineEnd`,
-  `unitType`/`unitName`, `title`, `before` (null si es código nuevo), `after`,
+  que hagas (no de exploración/lectura). Campos: `files` (array — **un cambio
+  puede tocar varios archivos**; cada uno con `file`, `lineStart`/`lineEnd`,
+  `before` (null si es código nuevo), `after`), `unitType`/`unitName`, `title`,
   `explanation` (el PORQUÉ, no una paráfrasis del diff), y `relationType`
   (`continuation` por defecto; `jump` + `relationNote` si no tiene que ver con
-  el cambio anterior).
+  el cambio anterior). **Deja el código de `before`/`after` completo, sin
+  truncar con `// ...`** — es lo primero que se lee y tiene que bastar por sí
+  solo; el mini-editor (abajo) es para ver el archivo entero alrededor, no un
+  sustituto de un diff bien escrito.
 - `render_timeline(projectId)` — regenera el HTML estático (para exportar o
   como respaldo legible en git). La vista viva es el servidor, no esto.
 - `list_changes` / `get_project` — consulta.
@@ -56,26 +60,48 @@ La web permite marcar "revisado" y dejar notas por entrada — se guardan en
 `data/projects/<id>/changes.json` vía la API del propio servidor
 (`PATCH /api/projects/:id/changes/:changeId`), no en el navegador.
 
+Cada archivo tocado por un cambio tiene un **mini-editor desplegable**
+(`<details>`, sin JS de terceros) que, al abrirse, pide
+`GET /api/projects/:id/changes/:changeId/files/:fileIndex` y muestra el
+archivo **completo**, con números de línea y el rango cambiado resaltado.
+Se lee del **working tree actual** del repo (`repoPath` del proyecto) — no
+del commit histórico — porque `archivo:línea` en todo este sistema significa
+"así está HOY", igual que en el resto de la documentación de los proyectos
+que audita. Si el archivo ya no existe ahí (renombrado/borrado), cae a
+`git show <commit>:<archivo>` como respaldo (`lib/repofile.mjs`).
+
 ## Arquitectura (para cuando haya que tocar el código de esta herramienta)
 
 - `lib/store.mjs` — toda la persistencia. JSON plano, sin base de datos:
   `data/projects.json` (registro) + `data/projects/<id>/changes.json` (una
   lista por proyecto). Se versiona en git — es el propio historial.
 - `lib/render.mjs` — genera HTML completo (ya no fragmentos para Artifact):
-  `renderTimelineHtml(project, changes)` y `renderIndexHtml(projects)`.
+  `renderTimelineHtml(project, changes)`, `renderIndexHtml(projects)`, y
+  `renderFileTable(content, lineStart, lineEnd)` (la tabla con números de
+  línea del mini-editor, reutilizada por el endpoint de archivo).
+- `lib/repofile.mjs` — `readFileAtCommit(repoPath, file, commit)`: lee el
+  working tree actual, cae a `git show` solo si el archivo ya no existe ahí.
 - `lib/httpserver.mjs` — servidor `http` nativo, sin framework. Rutas: `GET /`,
-  `GET /p/:id`, `PATCH /api/projects/:id/changes/:changeId`.
+  `GET /p/:id`, `PATCH /api/projects/:id/changes/:changeId`,
+  `GET /api/projects/:id/changes/:changeId/files/:fileIndex` (contenido del
+  mini-editor, cargado perezosamente al desplegar el `<details>`).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
 - `bin/cli.mjs` — CLI para el usuario: `serve`, `projects`, `link`, `changes`,
   `render`, `show`.
 
-**Diseño visual** (por si regeneras algo a mano): IBM Plex Sans/Mono, acento
-cobre (`--accent`), rojo/verde SOLO para los paneles antes/después
-(desaturados, no el rojo/verde saturado de GitHub). Ambos temas (claro/oscuro)
-vía `prefers-color-scheme` + `[data-theme]`. No reintroducir Inter/Space
-Grotesk ni la paleta morado-IA por defecto — fue una decisión deliberada,
-no un placeholder.
+**Diseño visual** (por si regeneras algo a mano, `lib/render.mjs`): un "libro
+de cambios" — Source Serif 4 para títulos/folios, Public Sans para cuerpo,
+JetBrains Mono para código/metadatos/badges. Acento latón/bronce (`--accent`,
+oklch, tono ~78), no el morado-IA por defecto. Rojo óxido / verde verdigris
+SOLO en los paneles antes/después (desaturados, no el rojo/verde saturado de
+GitHub). Ambos temas vía `prefers-color-scheme` + `[data-theme]`. Motivos
+propios: folios de día con cabecera pegajosa, "saltos" entre cambios no
+relacionados como un desgarro de página con etiqueta girada, entradas
+revisadas atenuadas y con un sello "Revisado" — para escanear rápido qué
+falta en un scroll largo. Explorado primero como canvas de diseño
+(`/design`) antes de portarlo aquí — no rediseñar sin ese paso si se pide
+"mejorar el diseño" otra vez; es una decisión ya tomada, no un borrador.
 
 ## Invariantes
 

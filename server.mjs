@@ -55,22 +55,26 @@ server.registerTool(
   {
     title: 'Registrar un cambio de código en el historial',
     description:
-      'Añade una entrada al timeline de un proyecto: qué método/clase/atributo cambió, dónde (archivo:línea), el código antes y después, y por qué. ' +
+      'Añade una entrada al timeline de un proyecto: qué método/clase/atributo cambió, en qué archivo(s) — puede tocar más de uno —, ' +
+      'el código antes y después de cada archivo, y por qué. Deja el código lo más completo posible, sin truncar con "...": ' +
+      'el mini-editor de la web ya deja ver el archivo entero, pero el antes/después es lo primero que se lee y debe bastar por sí solo. ' +
       'Si el cambio continúa directamente al anterior, deja relationType sin especificar (por defecto "continuation"). ' +
       'Si NO tiene relación con el cambio anterior (otro commit, otro problema, otro momento), pon relationType="jump" y explica el salto en relationNote.',
     inputSchema: {
       projectId: z.string(),
-      file: z.string().describe('Ruta del archivo relativa al repo, ej. "web/client/app.js"'),
-      lineStart: z.number().optional().describe('Línea donde empieza el cambio en el estado actual del archivo'),
-      lineEnd: z.number().optional().describe('Línea donde termina (si es una sola línea, igual a lineStart)'),
+      files: z.array(z.object({
+        file: z.string().describe('Ruta del archivo relativa al repo, ej. "web/client/app.js"'),
+        lineStart: z.number().optional().describe('Línea donde empieza el cambio en el estado actual del archivo'),
+        lineEnd: z.number().optional().describe('Línea donde termina (si es una sola línea, igual a lineStart)'),
+        language: z.string().optional().describe('Lenguaje para el bloque de código, ej. javascript, sql, python'),
+        before: z.string().nullable().optional().describe('Código anterior en ESTE archivo. null u omitido si es código nuevo que no existía'),
+        after: z.string().describe('Código resultante en ESTE archivo tras el cambio'),
+      })).min(1).describe('Uno por cada archivo que toca el cambio, en el orden que tenga sentido leerlos'),
       unitType: z.string().optional().describe('Tipo de unidad: función, método, clase, atributo, llamada, config...'),
       unitName: z.string().optional().describe('Nombre de la unidad, ej. "totalCentimos()"'),
       title: z.string().describe('Resumen de una línea de qué cambió'),
-      language: z.string().optional().describe('Lenguaje para el bloque de código, ej. javascript, sql, python'),
-      before: z.string().nullable().optional().describe('Código anterior. null u omitido si es código nuevo que no existía'),
-      after: z.string().describe('Código resultante tras el cambio'),
       explanation: z.string().describe('Qué cambió y POR QUÉ — el motivo real, no una paráfrasis del diff'),
-      commit: z.string().optional().describe('Hash corto del commit, si ya existe'),
+      commit: z.string().optional().describe('Hash corto del commit, si ya existe. Se usa para leer el archivo TAL COMO ESTABA en ese commit (git show) al abrir el mini-editor'),
       date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
       relationType: z.enum(['continuation', 'jump', 'start']).optional(),
       relationNote: z.string().optional().describe('Obligatorio si relationType="jump": explica qué distingue este cambio del anterior'),
