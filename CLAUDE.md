@@ -31,8 +31,8 @@ en cualquier proyecto, sin tener que abrir este repo. Herramientas:
   (`continuation` por defecto; `jump` + `relationNote` si no tiene que ver con
   el cambio anterior). **Deja el código de `before`/`after` completo, sin
   truncar con `// ...`** — es lo primero que se lee y tiene que bastar por sí
-  solo; el mini-editor (abajo) es para ver el archivo entero alrededor, no un
-  sustituto de un diff bien escrito.
+  solo; la vista de pantalla completa (abajo) es para ver el archivo entero
+  alrededor, no un sustituto de un diff bien escrito.
 - `render_timeline(projectId)` — regenera el HTML estático (para exportar o
   como respaldo legible en git). La vista viva es el servidor, no esto.
 - `list_changes` / `get_project` — consulta.
@@ -60,14 +60,24 @@ La web permite marcar "revisado" y dejar notas por entrada — se guardan en
 `data/projects/<id>/changes.json` vía la API del propio servidor
 (`PATCH /api/projects/:id/changes/:changeId`), no en el navegador.
 
-Cada archivo tocado por un cambio tiene un **mini-editor desplegable**
-(`<details>`, sin JS de terceros) que, al abrirse, pide
-`GET /api/projects/:id/changes/:changeId/files/:fileIndex` y muestra el
-archivo **completo**, con números de línea y el rango cambiado resaltado.
-Se lee del **working tree actual** del repo (`repoPath` del proyecto) — no
-del commit histórico — porque `archivo:línea` en todo este sistema significa
-"así está HOY", igual que en el resto de la documentación de los proyectos
-que audita. Si el archivo ya no existe ahí (renombrado/borrado), cae a
+Cada tarjeta del timeline tiene un enlace **"Pantalla completa"** que lleva a
+`/p/:id/c/:changeId` — decisión explícita del cliente (21-ago-2026): el
+desplegable inline dentro de la tarjeta (`<details>` de ~340px) era "poco
+práctico" para leer archivo + explicación + cambios relacionados a la vez.
+La vista de pantalla completa es una página propia (`renderChangeDetailHtml`,
+`lib/render.mjs`): cabecera con posición (`N / total`), navegación
+anterior/siguiente (⇦/⇨ de teclado también) para pasar de cambio en cambio
+sin volver al timeline, checkbox de revisado y nota arriba junto al motivo,
+y debajo un panel de archivo a toda altura (con pestañas si el cambio toca
+varios archivos). El primer archivo se renderiza en el propio HTML (carga
+inmediata); el resto se piden bajo demanda al cambiar de pestaña
+(`GET /api/projects/:id/changes/:changeId/files/:fileIndex`, mismo endpoint
+que antes usaba el `<details>`). Muestra el archivo **completo**, con
+números de línea y el rango cambiado resaltado, leído del **working tree
+actual** del repo (`repoPath` del proyecto) — no del commit histórico —
+porque `archivo:línea` en todo este sistema significa "así está HOY", igual
+que en el resto de la documentación de los proyectos que audita. Si el
+archivo ya no existe ahí (renombrado/borrado), cae a
 `git show <commit>:<archivo>` como respaldo (`lib/repofile.mjs`).
 
 ## Arquitectura (para cuando haya que tocar el código de esta herramienta)
@@ -76,15 +86,18 @@ que audita. Si el archivo ya no existe ahí (renombrado/borrado), cae a
   `data/projects.json` (registro) + `data/projects/<id>/changes.json` (una
   lista por proyecto). Se versiona en git — es el propio historial.
 - `lib/render.mjs` — genera HTML completo (ya no fragmentos para Artifact):
-  `renderTimelineHtml(project, changes)`, `renderIndexHtml(projects)`, y
-  `renderFileTable(content, lineStart, lineEnd)` (la tabla con números de
-  línea del mini-editor, reutilizada por el endpoint de archivo).
+  `renderTimelineHtml(project, changes)`, `renderChangeDetailHtml(project,
+  changes, index, firstFileHtml)` (la pantalla completa), `renderIndexHtml
+  (projects)`, y `renderFileTable(content, lineStart, lineEnd)` (la tabla
+  con números de línea, compartida por la pantalla completa y el endpoint
+  de archivo).
 - `lib/repofile.mjs` — `readFileAtCommit(repoPath, file, commit)`: lee el
   working tree actual, cae a `git show` solo si el archivo ya no existe ahí.
 - `lib/httpserver.mjs` — servidor `http` nativo, sin framework. Rutas: `GET /`,
-  `GET /p/:id`, `PATCH /api/projects/:id/changes/:changeId`,
-  `GET /api/projects/:id/changes/:changeId/files/:fileIndex` (contenido del
-  mini-editor, cargado perezosamente al desplegar el `<details>`).
+  `GET /p/:id`, `GET /p/:id/c/:changeId` (pantalla completa),
+  `PATCH /api/projects/:id/changes/:changeId`,
+  `GET /api/projects/:id/changes/:changeId/files/:fileIndex` (contenido de
+  un archivo, usado por la pantalla completa al cambiar de pestaña).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
 - `bin/cli.mjs` — CLI para el usuario: `serve`, `projects`, `link`, `changes`,
