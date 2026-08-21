@@ -1,0 +1,121 @@
+#!/usr/bin/env node
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
+import { writeFileSync } from 'node:fs';
+import {
+  listProjects, getProject, createProject, updateProject,
+  listChanges, addChange, timelineHtmlPath,
+} from './lib/store.mjs';
+import { renderTimelineHtml } from './lib/render.mjs';
+
+const server = new McpServer({ name: 'code-timeline', version: '1.0.0' });
+
+function text(obj) {
+  return { content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] };
+}
+
+server.registerTool(
+  'list_projects',
+  {
+    title: 'Listar proyectos vinculados',
+    description: 'Lista todos los proyectos registrados en Code Timeline, con su id, ruta y número de cambios registrados.',
+    inputSchema: {},
+  },
+  async () => text(listProjects()),
+);
+
+server.registerTool(
+  'link_project',
+  {
+    title: 'Vincular un proyecto nuevo',
+    description: 'Registra un repositorio para poder llevarle un historial de cambios. Se hace una vez por proyecto.',
+    inputSchema: {
+      name: z.string().describe('Nombre legible del proyecto, ej. "Dashboard Inventario"'),
+      repoPath: z.string().describe('Ruta absoluta al repositorio en disco'),
+      githubRemote: z.string().optional().describe('URL del remoto de GitHub, si existe'),
+    },
+  },
+  async ({ name, repoPath, githubRemote }) => text(createProject({ name, repoPath, githubRemote })),
+);
+
+server.registerTool(
+  'get_project',
+  {
+    title: 'Ver metadatos de un proyecto',
+    description: 'Devuelve los metadatos completos de un proyecto vinculado (incluida la URL del artifact publicado, si existe).',
+    inputSchema: { projectId: z.string() },
+  },
+  async ({ projectId }) => text(getProject(projectId)),
+);
+
+server.registerTool(
+  'set_artifact_url',
+  {
+    title: 'Guardar la URL del Artifact publicado',
+    description: 'Tras publicar (o redesplegar) el timeline de un proyecto con la herramienta Artifact, guarda aquí su URL para poder redesplegar en el mismo enlace en el futuro.',
+    inputSchema: { projectId: z.string(), artifactUrl: z.string() },
+  },
+  async ({ projectId, artifactUrl }) => text(updateProject(projectId, { artifactUrl })),
+);
+
+server.registerTool(
+  'add_change',
+  {
+    title: 'Registrar un cambio de código en el historial',
+    description:
+      'Añade una entrada al timeline de un proyecto: qué método/clase/atributo cambió, dónde (archivo:línea), el código antes y después, y por qué. ' +
+      'Si el cambio continúa directamente al anterior, deja relationType sin especificar (por defecto "continuation"). ' +
+      'Si NO tiene relación con el cambio anterior (otro commit, otro problema, otro momento), pon relationType="jump" y explica el salto en relationNote.',
+    inputSchema: {
+      projectId: z.string(),
+      file: z.string().describe('Ruta del archivo relativa al repo, ej. "web/client/app.js"'),
+      lineStart: z.number().optional().describe('Línea donde empieza el cambio en el estado actual del archivo'),
+      lineEnd: z.number().optional().describe('Línea donde termina (si es una sola línea, igual a lineStart)'),
+      unitType: z.string().optional().describe('Tipo de unidad: función, método, clase, atributo, llamada, config...'),
+      unitName: z.string().optional().describe('Nombre de la unidad, ej. "totalCentimos()"'),
+      title: z.string().describe('Resumen de una línea de qué cambió'),
+      language: z.string().optional().describe('Lenguaje para el bloque de código, ej. javascript, sql, python'),
+      before: z.string().nullable().optional().describe('Código anterior. null u omitido si es código nuevo que no existía'),
+      after: z.string().describe('Código resultante tras el cambio'),
+      explanation: z.string().describe('Qué cambió y POR QUÉ — el motivo real, no una paráfrasis del diff'),
+      commit: z.string().optional().describe('Hash corto del commit, si ya existe'),
+      date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
+      relationType: z.enum(['continuation', 'jump', 'start']).optional(),
+      relationNote: z.string().optional().describe('Obligatorio si relationType="jump": explica qué distingue este cambio del anterior'),
+    },
+  },
+  async (args) => text(addChange(args.projectId, args)),
+);
+
+server.registerTool(
+  'list_changes',
+  {
+    title: 'Listar cambios registrados',
+    description: 'Devuelve las entradas del historial de un proyecto, en orden cronológico.',
+    inputSchema: { projectId: z.string(), limit: z.number().optional() },
+  },
+  async ({ projectId, limit }) => text(listChanges(projectId, limit)),
+);
+
+server.registerTool(
+  'render_timeline',
+  {
+    title: 'Regenerar el HTML del timeline',
+    description:
+      'Reconstruye el timeline.html de un proyecto a partir de los cambios registrados y lo escribe en disco. ' +
+      'Devuelve la ruta del archivo — pásala a la herramienta Artifact para publicarlo (usa la artifactUrl guardada, si existe, para redesplegar en el mismo enlace en vez de crear uno nuevo).',
+    inputSchema: { projectId: z.string() },
+  },
+  async ({ projectId }) => {
+    const project = getProject(projectId);
+    const changes = listChanges(projectId);
+    const html = renderTimelineHtml(project, changes);
+    const path = timelineHtmlPath(projectId);
+    writeFileSync(path, html);
+    return text({ path, changeCount: changes.length, artifactUrl: project.artifactUrl || null });
+  },
+);
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
