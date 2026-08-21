@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { listProjects, getProject, createProject, listChanges, timelineHtmlPath } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { startServer } from '../lib/httpserver.mjs';
+import { writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 
 const [, , cmd, ...rest] = process.argv;
 
@@ -16,7 +18,7 @@ function printProjects(projects) {
     return;
   }
   for (const p of projects) {
-    console.log(`${p.id}\n  nombre:  ${p.name}\n  repo:    ${p.repoPath}\n  cambios: ${p.changeCount}\n  artifact: ${p.artifactUrl || '(sin publicar)'}\n`);
+    console.log(`${p.id}\n  nombre:    ${p.name}\n  repo:      ${p.repoPath}\n  cambios:   ${p.changeCount}\n  revisados: ${p.verifiedCount}\n`);
   }
 }
 
@@ -63,6 +65,19 @@ switch (cmd) {
     break;
   }
 
+  case 'serve': {
+    const portArg = flag('port', rest);
+    const port = portArg ? Number(portArg) : 4173;
+    const server = await startServer({ port });
+    const url = `http://localhost:${port}`;
+    console.log(`code-timeline corriendo en ${url}  (Ctrl+C para parar)`);
+    if (rest.includes('--open') && process.platform === 'darwin') {
+      spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+    }
+    process.on('SIGINT', () => { server.close(() => process.exit(0)); });
+    break;
+  }
+
   case 'show': {
     const id = rest[0];
     if (!id) { console.error('Uso: code-timeline show <projectId>'); process.exit(1); }
@@ -74,13 +89,14 @@ switch (cmd) {
     console.log(`code-timeline — historial visual de cambios de código
 
 Comandos:
+  serve [--port N] [--open]             levanta la web en localhost (viva, con notas)
   projects                              lista proyectos vinculados
   link --name N --path P [--remote R]   vincula un proyecto nuevo
   changes <projectId> [--limit N]       lista los cambios registrados
-  render <projectId>                    regenera timeline.html y muestra la ruta
+  render <projectId>                    exporta un timeline.html estático (archivo)
   show <projectId>                      metadatos completos del proyecto (JSON)
 
 Para AÑADIR cambios (con diff antes/después y explicación), se hace desde
 Claude Code vía el servidor MCP — es quien redacta cada entrada mientras
-trabaja. Este CLI es para consultar y publicar.`);
+trabaja. Este CLI es para consultar, servir la web y exportar.`);
 }

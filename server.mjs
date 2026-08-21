@@ -4,10 +4,11 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { writeFileSync } from 'node:fs';
 import {
-  listProjects, getProject, createProject, updateProject,
+  listProjects, getProject, createProject,
   listChanges, addChange, timelineHtmlPath,
 } from './lib/store.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
+import { startWeb, stopWeb, webStatus } from './lib/webproc.mjs';
 
 const server = new McpServer({ name: 'code-timeline', version: '1.0.0' });
 
@@ -43,20 +44,10 @@ server.registerTool(
   'get_project',
   {
     title: 'Ver metadatos de un proyecto',
-    description: 'Devuelve los metadatos completos de un proyecto vinculado (incluida la URL del artifact publicado, si existe).',
+    description: 'Devuelve los metadatos completos de un proyecto vinculado.',
     inputSchema: { projectId: z.string() },
   },
   async ({ projectId }) => text(getProject(projectId)),
-);
-
-server.registerTool(
-  'set_artifact_url',
-  {
-    title: 'Guardar la URL del Artifact publicado',
-    description: 'Tras publicar (o redesplegar) el timeline de un proyecto con la herramienta Artifact, guarda aquí su URL para poder redesplegar en el mismo enlace en el futuro.',
-    inputSchema: { projectId: z.string(), artifactUrl: z.string() },
-  },
-  async ({ projectId, artifactUrl }) => text(updateProject(projectId, { artifactUrl })),
 );
 
 server.registerTool(
@@ -101,10 +92,10 @@ server.registerTool(
 server.registerTool(
   'render_timeline',
   {
-    title: 'Regenerar el HTML del timeline',
+    title: 'Exportar el timeline a un HTML estático',
     description:
-      'Reconstruye el timeline.html de un proyecto a partir de los cambios registrados y lo escribe en disco. ' +
-      'Devuelve la ruta del archivo — pásala a la herramienta Artifact para publicarlo (usa la artifactUrl guardada, si existe, para redesplegar en el mismo enlace en vez de crear uno nuevo).',
+      'Escribe en disco una foto estática del timeline de un proyecto (para archivar o abrir sin servidor). ' +
+      'La vista viva e interactiva (con "revisado" y notas) es start_web, no esto.',
     inputSchema: { projectId: z.string() },
   },
   async ({ projectId }) => {
@@ -113,8 +104,40 @@ server.registerTool(
     const html = renderTimelineHtml(project, changes);
     const path = timelineHtmlPath(projectId);
     writeFileSync(path, html);
-    return text({ path, changeCount: changes.length, artifactUrl: project.artifactUrl || null });
+    return text({ path, changeCount: changes.length });
   },
+);
+
+server.registerTool(
+  'start_web',
+  {
+    title: 'Levantar la web local del timeline',
+    description:
+      'Arranca (o reutiliza si ya está corriendo) el servidor local del timeline y devuelve su URL. ' +
+      'Úsalo cuando el usuario pida "la web", "el timeline" o "levanta el servidor". Es un servidor en su máquina, no un Artifact.',
+    inputSchema: { port: z.number().optional().describe('Por defecto 4173') },
+  },
+  async ({ port }) => text(startWeb(port ? { port } : undefined)),
+);
+
+server.registerTool(
+  'stop_web',
+  {
+    title: 'Parar la web local del timeline',
+    description: 'Detiene el servidor local si está corriendo.',
+    inputSchema: {},
+  },
+  async () => text(stopWeb()),
+);
+
+server.registerTool(
+  'web_status',
+  {
+    title: 'Ver si la web local está corriendo',
+    description: 'Comprueba si el servidor del timeline está activo y en qué puerto/URL.',
+    inputSchema: {},
+  },
+  async () => text(webStatus() || { running: false }),
 );
 
 const transport = new StdioServerTransport();
