@@ -1,3 +1,6 @@
 node_modules/
-data/projects/*/timeline.html
-data/webserver.json
+
+# El historial es de quien lo genera, no del repo. Cada entrada guarda
+# fragmentos literales del código del proyecto vinculado: en un repo público
+# eso no puede viajar. data/ se queda en tu máquina.
+data/

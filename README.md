@@ -1,79 +1,185 @@
 # Code Timeline
 
-Historial de cambios de código verificable en orden: por cada cambio, el
-método/clase/atributo que tocó, en qué archivo(s) — puede ser más de uno —,
-el código de antes en rojo y el de después en verde, y por qué. Cada tarjeta
-tiene un enlace a pantalla completa: archivo COMPLETO (con pestañas si son
-varios), números de línea, la línea cambiada resaltada, navegación
-anterior/siguiente, leído en vivo del repo. Cuando un cambio no tiene
-relación con el anterior, se marca el salto y se explica.
+Un libro de cambios de tu código, en el orden en que se hicieron y con el
+porqué de cada uno. Claude Code registra cada cambio mientras trabaja —
+el método o la función que tocó, en qué archivos, el antes y el después, y la
+razón— y tú lo revisas después uno a uno, marcando lo que ya has verificado.
 
-No sustituye a `git log` — lo complementa. Un commit agrupa varios cambios de
-una vez; aquí cada entrada es una unidad revisable de una sentada, en el
-orden en que se hicieron, para que se puedan verificar una a una sin perder
-el hilo.
+Todo corre en tu máquina: un servidor MCP para que Claude escriba, y una web
+local en `localhost` para que tú leas. Nada se publica en ninguna parte.
 
-Web propia, en tu máquina — no un Artifact de Claude: nada sale de tu equipo,
-el repo se queda privado y no depende de que Claude publique nada cada vez.
+![Timeline de un proyecto](docs/img/timeline.png)
 
-## Piezas
+## Por qué, si ya existe `git log`
 
-- **`lib/store.mjs`** — persistencia. Cada proyecto vinculado vive en
-  `data/projects/<id>/changes.json`. Sin base de datos: son ficheros JSON,
-  legibles y versionables.
-- **`lib/render.mjs`** — genera las páginas HTML (timeline por proyecto + el
-  índice de proyectos).
-- **`lib/httpserver.mjs`** — servidor HTTP nativo de Node (sin framework):
-  sirve las páginas y una API mínima para guardar "revisado" y notas.
-- **`server.mjs`** — servidor MCP (stdio). Expone las mismas operaciones como
-  herramientas para que Claude las use directamente mientras trabaja:
-  `list_projects`, `link_project`, `get_project`, `add_change`,
-  `list_changes`, `render_timeline`, `start_web`, `stop_web`, `web_status`.
-- **`bin/cli.mjs`** — CLI para ti: `serve`, `projects`, `link`, `changes`,
-  `render`, `show`. Añadir cambios con su explicación es cosa de Claude
-  mientras trabaja (necesita redactar el porqué, no solo copiar el diff).
+No lo sustituye, lo complementa. Un commit agrupa varios cambios de una
+sentada y su mensaje cuenta el resultado, no el razonamiento. Aquí cada
+entrada es **una unidad revisable**: se entiende y se verifica de una vez, sin
+tener que reconstruir de qué iba.
 
-## Instalar el CLI
+Y hay una diferencia que en la práctica pesa más que ninguna: `git log` te dice
+qué cambió, no **por qué** ni **qué se rompía antes**. Cuando el que escribe el
+código es un agente, eso es justo lo que necesitas para poder revisarlo. Cada
+entrada lleva la explicación que el agente redactó *mientras* hacía el cambio,
+con el contexto todavía en la mano.
+
+Cuando un cambio no tiene nada que ver con el anterior, se marca como **salto**
+y hay que explicar por qué se cambió de tema. Al leer el historial seguido, eso
+es lo que evita perder el hilo.
+
+## Cómo se ve
+
+### El índice de proyectos
+
+Cuántos cambios lleva cada uno y cuántos has revisado ya.
+
+![Índice de proyectos](docs/img/proyectos.png)
+
+### La vista a pantalla completa
+
+El archivo **entero** leído del disco en vivo, con las líneas del cambio
+resaltadas, un árbol de los archivos del proyecto a la izquierda (con qué
+cambio tocó cada uno y si está revisado) y navegación anterior/siguiente para
+recorrer el historial sin volver atrás.
+
+![Vista a pantalla completa](docs/img/pantalla-completa.png)
+
+## Requisitos
+
+- **Node.js 18 o superior.** Sin base de datos y sin dependencias en tiempo de
+  ejecución para la web: el servidor HTTP es el `http` nativo de Node. La única
+  dependencia real es el SDK de MCP, y solo la usa `server.mjs`.
+- [Claude Code](https://claude.com/claude-code) si quieres que sea un agente
+  quien registre los cambios (que es el caso de uso). La web funciona por su
+  cuenta.
+
+## Instalar
 
 ```bash
-cd /ruta/a/code-timeline
-npm link          # deja "code-timeline" disponible en el PATH
-code-timeline serve --port 4173
+git clone https://github.com/FlEtsv/code-timeline.git
+cd code-timeline
+npm install
 ```
 
-Abre `http://localhost:4173`.
+### Pruébalo con el proyecto de ejemplo
 
-## Instalar el MCP (global, todos los proyectos)
+Antes de enchufarle nada tuyo, siembra la demo: vincula `examples/demo-repo`
+(un módulo de carrito minúsculo que viene en el repo) y le registra cinco
+cambios de ejemplo, con su antes/después, su explicación y un salto.
 
 ```bash
-claude mcp add --scope user code-timeline -- node /ruta/a/code-timeline/server.mjs
+npm run demo     # siembra el proyecto "Demo Carrito"
+npm start        # levanta la web
 ```
 
-Con esto, en cualquier sesión de Claude Code (de cualquier proyecto) Claude
-puede vincular ese repo, registrar cada cambio con su antes/después y motivo,
-y arrancarte el servidor cuando le pidas "la web" o "el timeline".
+Abre <http://localhost:4173>. Todo lo que ves en las capturas de arriba sale de
+ahí, así que puedes trastear con ello sin miedo: marca cosas como revisadas,
+deja notas, abre la pantalla completa. Para volver a empezar, borra `data/`.
 
-## Flujo típico
+### Instalar el CLI en el PATH (opcional)
 
-```
-tú: "vincula este proyecto"
-Claude: link_project(name, repoPath) → guarda el projectId
-
-[Claude hace un cambio de código]
-Claude: add_change(projectId, { files: [{ file, lineStart, before, after }, ...], unitName, explanation, ... })
-
-tú: "dame la web" / "levanta el timeline"
-Claude: code-timeline serve --port 4173 &   → te pasa http://localhost:4173
+```bash
+npm link
+code-timeline serve --port 4173 --open
 ```
 
-En la web marcas "revisado" y dejas notas por entrada — se guardan en el
-propio `changes.json` vía la API del servidor (no en el navegador: sobreviven
-a limpiar caché, cambiar de navegador, etc.).
+### Conectarlo a Claude Code
 
-## Datos
+Registra el servidor MCP una sola vez, con `--scope user` para tenerlo
+disponible desde cualquier proyecto:
 
-`data/projects.json` y `data/projects/*/changes.json` son la fuente de
-verdad y se versionan en git — son el propio historial, y vale la pena tener
-respaldo de qué se registró (incluidas tus notas y qué has revisado).
-`timeline.html` (la exportación estática de `render_timeline`) se regenera
-siempre desde ahí y está en `.gitignore`.
+```bash
+claude mcp add --scope user code-timeline -- node "$(pwd)/server.mjs"
+```
+
+A partir de ahí, en cualquier sesión de Claude Code puedes decirle "vincula
+este proyecto" y que vaya registrando lo que hace.
+
+## El flujo, en la práctica
+
+```
+tú:      vincula este proyecto
+Claude:  link_project(name, repoPath)  →  guarda el projectId
+
+         [Claude cambia código]
+Claude:  add_change(projectId, { files: [{ file, lineStart, before, after }],
+                                 unitName, title, explanation })
+
+tú:      levanta el timeline
+Claude:  code-timeline serve  →  http://localhost:4173
+```
+
+Y ya en la web: lees en orden, marcas "revisado" y dejas notas. Las notas y las
+marcas se guardan en el `changes.json` del proyecto a través de la API del
+servidor — no en el navegador, así que sobreviven a limpiar la caché o a
+cambiar de equipo.
+
+Añadir entradas es cosa del agente a propósito: el valor de cada una está en la
+explicación, y esa hay que redactarla con el cambio fresco, no deducirla luego
+de un diff.
+
+## El CLI
+
+```
+code-timeline serve [--port N] [--open]   levanta la web (viva, con notas)
+code-timeline projects                    lista los proyectos vinculados
+code-timeline link --name N --path P      vincula un proyecto
+code-timeline changes <projectId>         lista los cambios registrados
+code-timeline render <projectId>          exporta un timeline.html estático
+code-timeline show <projectId>            metadatos del proyecto (JSON)
+```
+
+## Las herramientas MCP
+
+| Herramienta | Para qué |
+| --- | --- |
+| `list_projects` | Todos los proyectos vinculados, con sus contadores |
+| `link_project` | Registra un repo. Una vez por proyecto |
+| `get_project` | Metadatos de uno |
+| `add_change` | Registra un cambio: archivos, antes/después, unidad y porqué |
+| `list_changes` | El historial, en orden cronológico |
+| `render_timeline` | Exporta el `timeline.html` estático |
+| `start_web` / `stop_web` / `web_status` | Controla el servidor web |
+
+`add_change` obliga a dos cosas: `title` y `explanation` nunca pueden ir
+vacíos, y un cambio marcado como `jump` tiene que traer una `relationNote` que
+diga qué lo separa del anterior. Son las dos únicas formas que tiene el store
+de defenderse de un historial que no se puede leer.
+
+## Dónde viven tus datos
+
+En `data/`, y en ningún sitio más:
+
+```
+data/
+  projects.json                    los proyectos vinculados
+  projects/<id>/changes.json       el historial, tus notas y qué has revisado
+  projects/<id>/timeline.html      export estático (se regenera; no se versiona)
+```
+
+Son ficheros JSON planos, legibles y editables. **`data/` está en
+`.gitignore`, y es a propósito**: cada entrada guarda fragmentos literales del
+código del proyecto vinculado, así que tu historial no debe acabar dentro de
+este repo ni de ningún otro que compartas. Si quieres respaldarlo, hazlo en un
+repositorio privado tuyo.
+
+## Cómo está montado
+
+| Archivo | Qué hace |
+| --- | --- |
+| `lib/store.mjs` | Persistencia. Ficheros JSON, sin base de datos |
+| `lib/render.mjs` | Genera el HTML: índice, timeline y vista completa |
+| `lib/httpserver.mjs` | Servidor HTTP nativo + API de "revisado" y notas |
+| `lib/repofile.mjs` | Lee el archivo del repo: el del disco, y si ya no está, el del commit |
+| `server.mjs` | Servidor MCP (stdio) |
+| `bin/cli.mjs` | El CLI |
+| `examples/demo-repo/` | El proyecto de ejemplo de `npm run demo` |
+
+La vista a pantalla completa lee siempre el **estado actual** del archivo en tu
+disco, no una copia congelada: es lo que abrirías hoy en el editor. Solo si el
+archivo ya no existe (renombrado o borrado) cae de vuelta al `git show` del
+commit que se registró con el cambio.
+
+## Licencia
+
+ISC. Ver [LICENSE](LICENSE).

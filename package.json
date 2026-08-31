@@ -1,18 +1,47 @@
 {
   "name": "code-timeline",
   "version": "1.0.0",
-  "description": "MCP server: historial visual de cambios de código, verificable en orden",
-  "main": "index.js",
+  "description": "Libro de cambios de código verificable: servidor MCP + web local donde Claude registra cada cambio con su antes/después y su porqué",
+  "type": "module",
+  "license": "ISC",
+  "author": "FlEtsv",
+  "homepage": "https://github.com/FlEtsv/code-timeline#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FlEtsv/code-timeline.git"
+  },
+  "bugs": {
+    "url": "https://github.com/FlEtsv/code-timeline/issues"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "claude-code",
+    "code-review",
+    "changelog",
+    "timeline",
+    "diff"
+  ],
   "bin": {
     "code-timeline": "./bin/cli.mjs"
   },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "files": [
+    "bin",
+    "lib",
+    "examples",
+    "scripts",
+    "server.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "module",
+  "scripts": {
+    "start": "node bin/cli.mjs serve --port 4173",
+    "demo": "node scripts/seed-demo.mjs",
+    "mcp": "node server.mjs"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "zod": "^4.4.3"

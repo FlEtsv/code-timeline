@@ -1,15 +1,15 @@
 # CLAUDE.md — Code Timeline
 
-Herramienta propia (no de un cliente): historial de cambios de código
-verificable en orden. La usas TÚ, Claude, mientras trabajas en cualquier otro
-proyecto suyo — este repo es infraestructura, no el trabajo en sí.
+Historial de cambios de código verificable en orden. La usas TÚ, Claude,
+mientras trabajas en cualquier otro proyecto del usuario — este repo es
+infraestructura, no el trabajo en sí.
 
 ## Qué es y para qué
 
 Por cada cambio de código que haces en una sesión: qué método/clase/atributo
 tocaste, dónde (archivo:línea), el código de antes y el de después, y el
-motivo. En orden, para que el usuario lo revise de arriba abajo sin perder el
-hilo. Cuando un cambio no continúa el anterior (otro commit, otro problema),
+motivo. En orden, para que el usuario lo revise de arriba abajo sin perder
+el hilo. Cuando un cambio no continúa el anterior (otro commit, otro problema),
 se marca como "salto" y se explica por qué.
 
 No sustituye a `git log` — lo complementa: un commit agrupa varias cosas de
@@ -107,8 +107,8 @@ archivo ya no existe ahí (renombrado/borrado), cae a
   un archivo, usado por la pantalla completa al cambiar de pestaña).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
-- `bin/cli.mjs` — CLI para el usuario: `serve`, `projects`, `link`, `changes`,
-  `render`, `show`.
+- `bin/cli.mjs` — CLI para el usuario: `serve`, `projects`, `link`,
+  `changes`, `render`, `show`.
 
 **Diseño visual** (por si regeneras algo a mano, `lib/render.mjs`): un "libro
 de cambios" — Source Serif 4 para títulos/folios, Public Sans para cuerpo,
@@ -130,10 +130,11 @@ falta en un scroll largo. Explorado primero como canvas de diseño
   tiene que decir qué distingue este cambio del anterior.
 - **Las claves de `data/` no se reescriben a mano.** Si necesitas migrar el
   esquema de `changes.json`, hazlo con un script (como
-  `scripts/seed-demo.mjs`), nunca editando el JSON directamente
-  principio de siempre: los datos son la fuente de verdad,
-  se tocan por código, no a ojo.
+  `scripts/seed-demo.mjs`), nunca editando el JSON directamente: los datos son
+  la fuente de verdad, se tocan por código, no a ojo.
 - `timeline.html` generado (`render_timeline` / `code-timeline render`) está
   en `.gitignore` — se regenera siempre desde `changes.json`, no se versiona.
-- Repo privado en GitHub (`FlEtsv/code-timeline`) a propósito: los diffs
-  contienen fragmentos de código real de proyectos de cliente.
+- **`data/` entero está en `.gitignore`.** Cada entrada guarda fragmentos
+  literales del código del proyecto vinculado: en un repo público el historial
+  de otra gente no puede acabar aquí dentro. El timeline de cada quien vive en
+  su máquina, y quien quiera versionarlo que lo haga en un repo suyo.
