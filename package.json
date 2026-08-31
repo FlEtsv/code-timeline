@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "Libro de cambios de código verificable: servidor MCP + web local donde Claude registra cada cambio con su antes/después y su porqué",
   "type": "module",
-  "license": "ISC",
+  "license": "SEE LICENSE IN LICENSE",
   "author": "FlEtsv",
   "homepage": "https://github.com/FlEtsv/code-timeline#readme",
   "repository": {

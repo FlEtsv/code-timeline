@@ -242,4 +242,16 @@ commit que se registró con el cambio.
 
 ## Licencia
 
-ISC. Ver [LICENSE](LICENSE).
+**Apache 2.0 + [Commons Clause](https://commonsclause.com/)** — ver [LICENSE](LICENSE).
+
+En corto: úsalo para lo que quieras, también en tu empresa y en tu trabajo
+diario. Modifícalo, cópialo, publica tus cambios. Lo único que no puedes es
+**venderlo**: cobrar por el software, o por un producto o servicio de pago cuyo
+valor venga entera o sustancialmente de él (hosting o soporte incluidos).
+
+Que quede claro para que nadie pierda el tiempo: la Commons Clause hace que
+esto **no** sea open source según la definición de la OSI, porque restringe el
+uso. El código está disponible y es modificable, pero si tu política interna
+exige licencias aprobadas por la OSI, esta no lo es.
+
+Si quieres vender algo basado en esto, escribe y lo hablamos.
