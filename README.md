@@ -252,12 +252,20 @@ repositorio privado tuyo.
 | --- | --- |
 | `lib/store.mjs` | Persistencia. Ficheros JSON, sin base de datos |
 | `lib/render.mjs` | Genera el HTML: índice, timeline, vista completa y el CSS de impresión |
+| `lib/highlight.mjs` | Resaltado de sintaxis, sin dependencias |
 | `lib/markdown.mjs` | El export a Markdown |
 | `lib/httpserver.mjs` | Servidor HTTP nativo + API de "revisado" y notas |
 | `lib/repofile.mjs` | Lee el archivo del repo: el del disco, y si ya no está, el del commit |
 | `server.mjs` | Servidor MCP (stdio) |
 | `bin/cli.mjs` | El CLI |
 | `examples/demo-repo/` | El proyecto de ejemplo de `npm run demo` |
+
+El código va resaltado, en los paneles del diff y en el archivo completo. El
+resaltador (`lib/highlight.mjs`) es un tokenizador de una pasada sin
+dependencias, y tiene una regla que lo mantiene honesto: cuando no conoce el
+lenguaje **no se inventa palabras clave** — sigue marcando cadenas, números y
+comentarios, que son casi universales, y deja el resto en el color del texto.
+Conoce JavaScript, TypeScript, Python, SQL, CSS y JSON.
 
 La vista a pantalla completa lee siempre el **estado actual** del archivo en tu
 disco, no una copia congelada: es lo que abrirías hoy en el editor. Solo si el
