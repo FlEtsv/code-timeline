@@ -128,6 +128,16 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 - **`add_change` con `relationType: "jump"` exige `relationNote`** — el store
   lo rechaza si falta (`lib/store.mjs`). No lo rellenes con relleno genérico:
   tiene que decir qué distingue este cambio del anterior.
+- **`add_change` es para código que YA has escrito; `propose_change` para el
+  que no.** Es la frontera que sostiene toda la interfaz: la vista a pantalla
+  completa lee el archivo del disco, así que una propuesta registrada como
+  cambio enseña un archivo que no se parece a lo que dice su tarjeta. Propón
+  cuando veas algo mejorable fuera del encargo, cuando haya más de un camino
+  razonable, o cuando convenga acordarlo antes de escribirlo.
+- **Decidir es del usuario.** `decide_proposal` solo se usa si te lo pide él;
+  nunca para dar por buena una propuesta tuya. Antes de proponer, mira
+  `list_proposals` con `status: "rejected"`: si ya se descartó, el motivo está
+  ahí y volver a proponerlo es hacerle perder el tiempo.
 - **Las claves de `data/` no se reescriben a mano.** Si necesitas migrar el
   esquema de `changes.json`, hazlo con un script (como
   `scripts/seed-demo.mjs`), nunca editando el JSON directamente: los datos son

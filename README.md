@@ -5,8 +5,12 @@ porqué de cada uno. Claude Code registra cada cambio mientras trabaja —
 el método o la función que tocó, en qué archivos, el antes y el después, y la
 razón— y tú lo revisas después uno a uno, marcando lo que ya has verificado.
 
+También puede **proponer** cambios que no ha hecho: aparecen aparte, y tú los
+aceptas o los descartas. Lo hecho y lo sugerido nunca se mezclan.
+
 Todo corre en tu máquina: un servidor MCP para que Claude escriba, y una web
-local en `localhost` para que tú leas. Nada se publica en ninguna parte.
+local en `localhost` para que tú leas. Nada se publica en ninguna parte. El
+historial se exporta a JSON (respaldo y traslado), a Markdown y a PDF.
 
 ![Timeline de un proyecto](docs/img/timeline.png)
 
@@ -43,6 +47,39 @@ cambio tocó cada uno y si está revisado) y navegación anterior/siguiente para
 recorrer el historial sin volver atrás.
 
 ![Vista a pantalla completa](docs/img/pantalla-completa.png)
+
+### Propuestas
+
+Claude también puede sugerir sin tocar nada (`propose_change`). Una propuesta
+va **arriba, fuera del hilo cronológico**, con borde discontinuo: es lo único
+de la página que te pide una decisión. El historial de abajo es cosa hecha.
+
+![Propuestas pendientes](docs/img/propuestas.png)
+
+Aceptarla la convierte en un cambio del historial —el mismo registro, con la
+nota que dejaste al revisarla—. Descartarla la archiva con tu motivo, no la
+borra: saber qué se rechazó y por qué es lo que evita volver a proponerlo
+dentro de tres semanas, y `list_proposals` deja que Claude lo consulte.
+
+Una propuesta tiene una trampa que la vista completa avisa explícitamente: el
+archivo que se lee del disco es el **estado actual**, no el propuesto. Las
+líneas resaltadas marcan dónde iría, y el código propuesto va al lado.
+
+![Vista completa de una propuesta](docs/img/propuesta-completa.png)
+
+### Exportar
+
+El botón **Imprimir / PDF** abre el diálogo del navegador sobre una versión
+para papel: A4, tema claro, el código envuelto en vez de recortado, sin
+botones y con los paneles apilados para que quepan.
+
+![El timeline impreso en PDF](docs/img/pdf.png)
+
+Además, **JSON** y **Markdown**, desde la web, el CLI o el MCP. El JSON es el
+formato de respaldo y de traslado — `import_project` lo vuelve a montar en
+otra máquina, y al fusionar compara por id, así que reimportar el mismo
+fichero dos veces no duplica nada. Como `data/` no se versiona, esto es lo
+único que hay entre tú y perder tus notas de revisión.
 
 ## Requisitos
 
@@ -105,6 +142,9 @@ Claude:  link_project(name, repoPath)  →  guarda el projectId
 Claude:  add_change(projectId, { files: [{ file, lineStart, before, after }],
                                  unitName, title, explanation })
 
+         [Claude ve algo mejorable, pero fuera del encargo]
+Claude:  propose_change(projectId, { ... })  →  queda pendiente de tu decisión
+
 tú:      levanta el timeline
 Claude:  code-timeline serve  →  http://localhost:4173
 ```
@@ -125,6 +165,10 @@ code-timeline serve [--port N] [--open]   levanta la web (viva, con notas)
 code-timeline projects                    lista los proyectos vinculados
 code-timeline link --name N --path P      vincula un proyecto
 code-timeline changes <projectId>         lista los cambios registrados
+code-timeline proposals <projectId>       las propuestas pendientes (--rejected, las descartadas)
+code-timeline decide <id> <changeId> accept|reject [--note "..."]
+code-timeline export <projectId> [--format json|md] [--out ruta|-]
+code-timeline import <fichero.json> [--merge <projectId>] [--repo <ruta>]
 code-timeline render <projectId>          exporta un timeline.html estático
 code-timeline show <projectId>            metadatos del proyecto (JSON)
 ```
@@ -136,10 +180,21 @@ code-timeline show <projectId>            metadatos del proyecto (JSON)
 | `list_projects` | Todos los proyectos vinculados, con sus contadores |
 | `link_project` | Registra un repo. Una vez por proyecto |
 | `get_project` | Metadatos de uno |
-| `add_change` | Registra un cambio: archivos, antes/después, unidad y porqué |
+| `add_change` | Registra un cambio **ya aplicado**: archivos, antes/después, unidad y porqué |
+| `propose_change` | Registra una **propuesta**: código que aún no ha tocado |
 | `list_changes` | El historial, en orden cronológico |
+| `list_proposals` | Las pendientes, o las descartadas con su motivo |
+| `decide_proposal` | Acepta o descarta (solo si se lo pides tú) |
+| `export_project` | Escribe el historial a JSON o Markdown |
+| `import_project` | Lee un JSON exportado: proyecto nuevo o fusión |
 | `render_timeline` | Exporta el `timeline.html` estático |
 | `start_web` / `stop_web` / `web_status` | Controla el servidor web |
+
+La frontera entre `add_change` y `propose_change` es la que sostiene todo lo
+demás, y por eso está escrita en la descripción de las dos herramientas: una es
+para código que ya existe en el repo, la otra para código que no. Si se
+confunden, la vista completa enseña un archivo que no se parece a lo que
+cuenta la tarjeta.
 
 `add_change` obliga a dos cosas: `title` y `explanation` nunca pueden ir
 vacíos, y un cambio marcado como `jump` tiene que traer una `relationNote` que
@@ -153,9 +208,13 @@ En `data/`, y en ningún sitio más:
 ```
 data/
   projects.json                    los proyectos vinculados
-  projects/<id>/changes.json       el historial, tus notas y qué has revisado
+  projects/<id>/changes.json       cambios, propuestas, notas y qué has revisado
   projects/<id>/timeline.html      export estático (se regenera; no se versiona)
 ```
+
+Cambios y propuestas comparten fichero y comparten id: aceptar una propuesta
+la convierte en cambio **sin moverla de sitio**, así que no se pierde ni su
+antes/después ni la nota que dejaste mientras la revisabas.
 
 Son ficheros JSON planos, legibles y editables. **`data/` está en
 `.gitignore`, y es a propósito**: cada entrada guarda fragmentos literales del
@@ -168,7 +227,8 @@ repositorio privado tuyo.
 | Archivo | Qué hace |
 | --- | --- |
 | `lib/store.mjs` | Persistencia. Ficheros JSON, sin base de datos |
-| `lib/render.mjs` | Genera el HTML: índice, timeline y vista completa |
+| `lib/render.mjs` | Genera el HTML: índice, timeline, vista completa y el CSS de impresión |
+| `lib/markdown.mjs` | El export a Markdown |
 | `lib/httpserver.mjs` | Servidor HTTP nativo + API de "revisado" y notas |
 | `lib/repofile.mjs` | Lee el archivo del repo: el del disco, y si ya no está, el del commit |
 | `server.mjs` | Servidor MCP (stdio) |

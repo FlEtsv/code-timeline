@@ -2,18 +2,32 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   listProjects, getProject, createProject,
-  listChanges, addChange, timelineHtmlPath,
+  listChanges, listByStatus, addChange, addProposal, decideProposal,
+  exportProject, importProject, timelineHtmlPath,
 } from './lib/store.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
+import { renderMarkdown } from './lib/markdown.mjs';
 import { startWeb, stopWeb, webStatus } from './lib/webproc.mjs';
 
 const server = new McpServer({ name: 'code-timeline', version: '1.0.0' });
 
 function text(obj) {
   return { content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] };
+}
+
+function fileSchema(description) {
+  return z.array(z.object({
+    file: z.string().describe('Ruta del archivo relativa al repo, ej. "web/client/app.js"'),
+    lineStart: z.number().optional().describe('Línea donde empieza el cambio en el estado actual del archivo'),
+    lineEnd: z.number().optional().describe('Línea donde termina (si es una sola línea, igual a lineStart)'),
+    language: z.string().optional().describe('Lenguaje para el bloque de código, ej. javascript, sql, python'),
+    before: z.string().nullable().optional().describe('Código anterior en ESTE archivo. null u omitido si es código nuevo que no existía'),
+    after: z.string().describe('Código resultante en ESTE archivo tras el cambio'),
+  })).min(1).describe(description);
 }
 
 server.registerTool(
@@ -53,8 +67,9 @@ server.registerTool(
 server.registerTool(
   'add_change',
   {
-    title: 'Registrar un cambio de código en el historial',
+    title: 'Registrar un cambio de código YA APLICADO',
     description:
+      'SOLO para código que ya has escrito en el repo. Si todavía no lo has tocado y lo que quieres es sugerirlo, usa propose_change. ' +
       'Añade una entrada al timeline de un proyecto: qué método/clase/atributo cambió, en qué archivo(s) — puede tocar más de uno —, ' +
       'el código antes y después de cada archivo, y por qué. Deja el código lo más completo posible, sin truncar con "...": ' +
       'el mini-editor de la web ya deja ver el archivo entero, pero el antes/después es lo primero que se lee y debe bastar por sí solo. ' +
@@ -62,14 +77,7 @@ server.registerTool(
       'Si NO tiene relación con el cambio anterior (otro commit, otro problema, otro momento), pon relationType="jump" y explica el salto en relationNote.',
     inputSchema: {
       projectId: z.string(),
-      files: z.array(z.object({
-        file: z.string().describe('Ruta del archivo relativa al repo, ej. "web/client/app.js"'),
-        lineStart: z.number().optional().describe('Línea donde empieza el cambio en el estado actual del archivo'),
-        lineEnd: z.number().optional().describe('Línea donde termina (si es una sola línea, igual a lineStart)'),
-        language: z.string().optional().describe('Lenguaje para el bloque de código, ej. javascript, sql, python'),
-        before: z.string().nullable().optional().describe('Código anterior en ESTE archivo. null u omitido si es código nuevo que no existía'),
-        after: z.string().describe('Código resultante en ESTE archivo tras el cambio'),
-      })).min(1).describe('Uno por cada archivo que toca el cambio, en el orden que tenga sentido leerlos'),
+      files: fileSchema('Uno por cada archivo que toca el cambio, en el orden que tenga sentido leerlos'),
       unitType: z.string().optional().describe('Tipo de unidad: función, método, clase, atributo, llamada, config...'),
       unitName: z.string().optional().describe('Nombre de la unidad, ej. "totalCentimos()"'),
       title: z.string().describe('Resumen de una línea de qué cambió'),
@@ -142,6 +150,112 @@ server.registerTool(
     inputSchema: {},
   },
   async () => text(webStatus() || { running: false }),
+);
+
+server.registerTool(
+  'propose_change',
+  {
+    title: 'Proponer un cambio que todavía NO has aplicado',
+    description:
+      'Registra una PROPUESTA: código que crees que habría que cambiar pero que no has tocado. Aparece aparte del historial, ' +
+      'arriba, esperando que el usuario la acepte o la descarte desde la web. Aceptada, pasa a ser un cambio del historial; ' +
+      'descartada, se archiva con el motivo. ' +
+      'Úsalo cuando veas algo mejorable fuera del encargo, cuando haya más de un camino razonable y quieras que elija, ' +
+      'o cuando el cambio sea lo bastante grande como para acordarlo antes de escribirlo. ' +
+      'El "después" es el código que PROPONES, no el que existe: la vista a pantalla completa avisa de ello. ' +
+      'Si el cambio ya está hecho, la herramienta correcta es add_change.',
+    inputSchema: {
+      projectId: z.string(),
+      files: fileSchema('Los archivos que tocaría la propuesta, con el código actual en "before" y el propuesto en "after"'),
+      unitType: z.string().optional().describe('Tipo de unidad: función, método, clase, atributo, config...'),
+      unitName: z.string().optional().describe('Nombre de la unidad, ej. "totalCentimos()"'),
+      title: z.string().describe('Resumen de una línea de qué propones'),
+      explanation: z.string().describe('Qué propones y POR QUÉ: qué problema resuelve o qué mejora, y qué se pierde si no se hace'),
+      date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
+    },
+  },
+  async (args) => text(addProposal(args.projectId, args)),
+);
+
+server.registerTool(
+  'list_proposals',
+  {
+    title: 'Listar propuestas',
+    description:
+      'Devuelve las propuestas de un proyecto. Por defecto las pendientes (aún sin decidir); ' +
+      'con status="rejected", las descartadas y el motivo por el que se descartaron — útil para no volver a proponer lo mismo.',
+    inputSchema: {
+      projectId: z.string(),
+      status: z.enum(['proposal', 'rejected']).optional().describe('"proposal" (pendientes, por defecto) o "rejected" (descartadas)'),
+    },
+  },
+  async ({ projectId, status }) => text(listByStatus(projectId, status || 'proposal')),
+);
+
+server.registerTool(
+  'decide_proposal',
+  {
+    title: 'Aceptar o descartar una propuesta',
+    description:
+      'Marca una propuesta como aceptada (pasa al historial como cambio) o descartada (se archiva con el motivo). ' +
+      'La decisión es del usuario: usa esto solo cuando te lo pida explícitamente ("acepta la propuesta del carrito"), ' +
+      'nunca por tu cuenta ni para dar por buena una propuesta tuya.',
+    inputSchema: {
+      projectId: z.string(),
+      changeId: z.string().describe('id de la propuesta, de list_proposals'),
+      decision: z.enum(['accept', 'reject']),
+      note: z.string().optional().describe('Motivo. Muy recomendable al descartar: es lo que evita volver a proponerlo'),
+    },
+  },
+  async ({ projectId, changeId, decision, note }) => text(decideProposal(projectId, changeId, { decision, note })),
+);
+
+server.registerTool(
+  'export_project',
+  {
+    title: 'Exportar el historial de un proyecto',
+    description:
+      'Escribe el historial completo (cambios, propuestas, descartes, notas y qué está revisado) a un fichero. ' +
+      'Formato "json" para respaldar o mover el proyecto a otra máquina (lo lee import_project); ' +
+      '"md" para leerlo o compartirlo como texto. Como data/ no se versiona, esto es la vía de respaldo.',
+    inputSchema: {
+      projectId: z.string(),
+      format: z.enum(['json', 'md']).optional().describe('Por defecto "json"'),
+      outPath: z.string().optional().describe('Ruta absoluta del fichero a escribir. Por defecto, dentro de data/projects/<id>/'),
+    },
+  },
+  async ({ projectId, format = 'json', outPath }) => {
+    const project = getProject(projectId);
+    const body = format === 'json'
+      ? JSON.stringify(exportProject(projectId), null, 2)
+      : renderMarkdown(project, listChanges(projectId));
+    const path = outPath
+      ? resolve(outPath)
+      : timelineHtmlPath(projectId).replace(/timeline\.html$/, `export.${format}`);
+    writeFileSync(path, body);
+    return text({ path, format, bytes: Buffer.byteLength(body) });
+  },
+);
+
+server.registerTool(
+  'import_project',
+  {
+    title: 'Importar un historial exportado',
+    description:
+      'Lee un fichero JSON de export_project. Por defecto crea un proyecto NUEVO con ese historial. ' +
+      'Con mode="merge" y targetId, añade a un proyecto existente solo las entradas que le falten (compara por id, ' +
+      'así que reimportar el mismo fichero dos veces no duplica nada).',
+    inputSchema: {
+      filePath: z.string().describe('Ruta al .json exportado'),
+      mode: z.enum(['new', 'merge']).optional().describe('Por defecto "new"'),
+      targetId: z.string().optional().describe('Obligatorio con mode="merge"'),
+      repoPath: z.string().optional().describe('Ruta del repo en ESTA máquina, si difiere de la del export'),
+    },
+  },
+  async ({ filePath, mode, targetId, repoPath }) => {
+    const bundle = JSON.parse(readFileSync(resolve(filePath), 'utf8'));
+    return text(importProject(bundle, { mode: mode || 'new', targetId, repoPath }));
+  },
 );
 
 const transport = new StdioServerTransport();
