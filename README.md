@@ -56,10 +56,27 @@ de la página que te pide una decisión. El historial de abajo es cosa hecha.
 
 ![Propuestas pendientes](docs/img/propuestas.png)
 
-Aceptarla la convierte en un cambio del historial —el mismo registro, con la
-nota que dejaste al revisarla—. Descartarla la archiva con tu motivo, no la
-borra: saber qué se rechazó y por qué es lo que evita volver a proponerlo
-dentro de tres semanas, y `list_proposals` deja que Claude lo consulte.
+Aceptarla **no** la mete en el historial: la deja en *aceptada, pendiente de
+aplicar*. El historial dice lo que está en el código, y al aceptar todavía no
+lo está — nadie la ha escrito. Entra cuando quien la escribe lo confirma con
+`mark_applied`, y entonces vuelve a "pendiente de revisar" como cualquier otro
+cambio.
+
+Descartarla la archiva con tu motivo, no la borra: saber qué se rechazó y por
+qué es lo que evita volver a proponerlo dentro de tres semanas.
+
+### Cómo se entera Claude de que aceptaste
+
+**La web no puede avisarle** — es una página en tu `localhost`, no tiene por
+dónde llamarle. Así que el traspaso es explícito por los dos lados:
+
+- La tarjeta aceptada te da la orden ya escrita y un botón para copiarla:
+  `aplica la propuesta "..."`. La pegas en Claude Code y listo.
+- Claude puede verlo por su cuenta con `list_proposals` y `status: "accepted"`.
+  El `CLAUDE.md` del repo le dice que lo mire al ponerse a trabajar, así que
+  normalmente lo saca él solo sin que se lo pidas.
+
+![Una propuesta aceptada, esperando a que alguien la escriba](docs/img/aceptadas.png)
 
 Una propuesta tiene una trampa que la vista completa avisa explícitamente: el
 archivo que se lee del disco es el **estado actual**, no el propuesto. Las
@@ -165,8 +182,9 @@ code-timeline serve [--port N] [--open]   levanta la web (viva, con notas)
 code-timeline projects                    lista los proyectos vinculados
 code-timeline link --name N --path P      vincula un proyecto
 code-timeline changes <projectId>         lista los cambios registrados
-code-timeline proposals <projectId>       las propuestas pendientes (--rejected, las descartadas)
+code-timeline proposals <projectId>       pendientes (--accepted: sin aplicar; --rejected: descartadas)
 code-timeline decide <id> <changeId> accept|reject [--note "..."]
+code-timeline applied <id> <changeId> [--commit sha]
 code-timeline export <projectId> [--format json|md] [--out ruta|-]
 code-timeline import <fichero.json> [--merge <projectId>] [--repo <ruta>]
 code-timeline render <projectId>          exporta un timeline.html estático
@@ -185,6 +203,7 @@ code-timeline show <projectId>            metadatos del proyecto (JSON)
 | `list_changes` | El historial, en orden cronológico |
 | `list_proposals` | Las pendientes, o las descartadas con su motivo |
 | `decide_proposal` | Acepta o descarta (solo si se lo pides tú) |
+| `mark_applied` | Confirma que una aceptada ya está escrita: pasa al historial |
 | `export_project` | Escribe el historial a JSON o Markdown |
 | `import_project` | Lee un JSON exportado: proyecto nuevo o fusión |
 | `render_timeline` | Exporta el `timeline.html` estático |
@@ -212,9 +231,14 @@ data/
   projects/<id>/timeline.html      export estático (se regenera; no se versiona)
 ```
 
-Cambios y propuestas comparten fichero y comparten id: aceptar una propuesta
-la convierte en cambio **sin moverla de sitio**, así que no se pierde ni su
-antes/después ni la nota que dejaste mientras la revisabas.
+Cambios y propuestas comparten fichero y comparten id. Una entrada recorre sus
+estados sin moverse de sitio, así que nunca pierde su antes/después ni la nota
+que dejaste al revisarla:
+
+```
+proposal ──aceptar──> accepted ──mark_applied──> change
+    └─────descartar─────> rejected
+```
 
 Son ficheros JSON planos, legibles y editables. **`data/` está en
 `.gitignore`, y es a propósito**: cada entrada guarda fragmentos literales del

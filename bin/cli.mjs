@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   listProjects, getProject, createProject, listChanges, listByStatus,
-  decideProposal, exportProject, importProject, timelineHtmlPath,
+  decideProposal, markApplied, exportProject, importProject, timelineHtmlPath,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { renderMarkdown } from '../lib/markdown.mjs';
@@ -24,7 +24,8 @@ function printProjects(projects) {
   }
   for (const p of projects) {
     const prop = p.proposalCount ? `\n  propuestas: ${p.proposalCount} pendiente${p.proposalCount === 1 ? '' : 's'}` : '';
-    console.log(`${p.id}\n  nombre:    ${p.name}\n  repo:      ${p.repoPath}\n  cambios:   ${p.changeCount}\n  revisados: ${p.verifiedCount}${prop}\n`);
+    const apl = p.acceptedCount ? `\n  por aplicar: ${p.acceptedCount}` : '';
+    console.log(`${p.id}\n  nombre:    ${p.name}\n  repo:      ${p.repoPath}\n  cambios:   ${p.changeCount}\n  revisados: ${p.verifiedCount}${prop}${apl}\n`);
   }
 }
 
@@ -62,10 +63,15 @@ switch (cmd) {
 
   case 'proposals': {
     const id = rest[0];
-    if (!id) { console.error('Uso: code-timeline proposals <projectId> [--rejected]'); process.exit(1); }
-    const status = rest.includes('--rejected') ? 'rejected' : 'proposal';
+    if (!id) { console.error('Uso: code-timeline proposals <projectId> [--accepted|--rejected]'); process.exit(1); }
+    const status = rest.includes('--rejected') ? 'rejected' : rest.includes('--accepted') ? 'accepted' : 'proposal';
     const list = listByStatus(id, status);
-    if (!list.length) { console.log(status === 'rejected' ? 'Sin propuestas descartadas.' : 'Sin propuestas pendientes.'); break; }
+    if (!list.length) {
+      console.log(status === 'rejected' ? 'Sin propuestas descartadas.'
+        : status === 'accepted' ? 'Sin propuestas aceptadas pendientes de aplicar.'
+        : 'Sin propuestas pendientes.');
+      break;
+    }
     for (const c of list) {
       const files = (c.files || []).map((f) => f.file).join(', ');
       console.log(`${c.id}\n  ${c.title}\n  ${files}${c.decisionNote ? '\n  motivo: ' + c.decisionNote : ''}\n`);
@@ -81,6 +87,14 @@ switch (cmd) {
     }
     const out = decideProposal(id, changeId, { decision, note: flag('note', rest) });
     console.log(`${out.title}\n  ${decision === 'accept' ? 'aceptada: ya es un cambio del historial' : 'descartada'}`);
+    break;
+  }
+
+  case 'applied': {
+    const [id, changeId] = rest;
+    if (!id || !changeId) { console.error('Uso: code-timeline applied <projectId> <changeId> [--commit sha]'); process.exit(1); }
+    const out = markApplied(id, changeId, { commit: flag('commit', rest) });
+    console.log(`${out.title}\n  ya es un cambio del historial, pendiente de revisar`);
     break;
   }
 
@@ -156,9 +170,12 @@ Comandos:
   projects                              lista proyectos vinculados
   link --name N --path P [--remote R]   vincula un proyecto nuevo
   changes <projectId> [--limit N]       lista los cambios registrados
-  proposals <projectId> [--rejected]    lista las propuestas pendientes (o las descartadas)
+  proposals <projectId> [--accepted|--rejected]
+                                        propuestas pendientes, aceptadas sin aplicar, o descartadas
   decide <projectId> <changeId> accept|reject [--note "..."]
                                         acepta o descarta una propuesta
+  applied <projectId> <changeId> [--commit sha]
+                                        confirma que una aceptada ya está escrita
   export <projectId> [--format json|md] [--out ruta|-]
                                         exporta el historial (json = respaldo, md = lectura)
   import <fichero.json> [--merge <projectId>] [--repo <ruta>]

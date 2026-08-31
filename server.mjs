@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   listProjects, getProject, createProject,
-  listChanges, listByStatus, addChange, addProposal, decideProposal,
+  listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied,
   exportProject, importProject, timelineHtmlPath,
 } from './lib/store.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
@@ -182,11 +182,15 @@ server.registerTool(
   {
     title: 'Listar propuestas',
     description:
-      'Devuelve las propuestas de un proyecto. Por defecto las pendientes (aún sin decidir); ' +
-      'con status="rejected", las descartadas y el motivo por el que se descartaron — útil para no volver a proponer lo mismo.',
+      'Devuelve las propuestas de un proyecto según su estado. ' +
+      '"proposal" (por defecto): pendientes de que el usuario decida. ' +
+      '"accepted": YA ACEPTADAS y esperando a que alguien las escriba — esto es trabajo comprometido y pendiente, ' +
+      'míralo al empezar a trabajar en un proyecto y cuando el usuario diga "aplica la propuesta ..."; ' +
+      'al terminar de aplicarla, llama a mark_applied. ' +
+      '"rejected": descartadas, con el motivo — consúltalo antes de proponer, para no repetir algo ya rechazado.',
     inputSchema: {
       projectId: z.string(),
-      status: z.enum(['proposal', 'rejected']).optional().describe('"proposal" (pendientes, por defecto) o "rejected" (descartadas)'),
+      status: z.enum(['proposal', 'accepted', 'rejected']).optional().describe('"proposal" (por defecto), "accepted" (aceptadas sin aplicar) o "rejected"'),
     },
   },
   async ({ projectId, status }) => text(listByStatus(projectId, status || 'proposal')),
@@ -197,7 +201,9 @@ server.registerTool(
   {
     title: 'Aceptar o descartar una propuesta',
     description:
-      'Marca una propuesta como aceptada (pasa al historial como cambio) o descartada (se archiva con el motivo). ' +
+      'Marca una propuesta como aceptada o descartada. Aceptar NO la mete en el historial: la deja en estado ' +
+      '"accepted" (aprobada, pendiente de aplicar), porque en ese momento el código todavía no existe. ' +
+      'Entra en el historial cuando alguien la escribe y lo confirma con mark_applied. ' +
       'La decisión es del usuario: usa esto solo cuando te lo pida explícitamente ("acepta la propuesta del carrito"), ' +
       'nunca por tu cuenta ni para dar por buena una propuesta tuya.',
     inputSchema: {
@@ -256,6 +262,27 @@ server.registerTool(
     const bundle = JSON.parse(readFileSync(resolve(filePath), 'utf8'));
     return text(importProject(bundle, { mode: mode || 'new', targetId, repoPath }));
   },
+);
+
+server.registerTool(
+  'mark_applied',
+  {
+    title: 'Confirmar que una propuesta aceptada ya está escrita',
+    description:
+      'Cierra el círculo de una propuesta: pasa de "aceptada" a cambio del historial. Llámalo DESPUÉS de haber ' +
+      'escrito el código de verdad en el repo, nunca antes — el historial dice lo que está en el código. ' +
+      'Pasa en "files" lo que realmente escribiste: casi nunca es idéntico a lo propuesto, y lo que hay que guardar ' +
+      'es lo aplicado, no lo sugerido. La entrada se recoloca con la fecha de hoy y vuelve a "pendiente de revisar", ' +
+      'para que el usuario la verifique como cualquier otro cambio.',
+    inputSchema: {
+      projectId: z.string(),
+      changeId: z.string().describe('id de la propuesta aceptada, de list_proposals con status="accepted"'),
+      files: fileSchema('El código REAL que escribiste. Omítelo solo si aplicaste la propuesta tal cual, sin un carácter de diferencia').optional(),
+      commit: z.string().optional().describe('Hash corto del commit, si ya lo hiciste'),
+      note: z.string().optional().describe('Qué cambió respecto a lo propuesto, si hubo que desviarse'),
+    },
+  },
+  async ({ projectId, changeId, files, commit, note }) => text(markApplied(projectId, changeId, { files, commit, note })),
 );
 
 const transport = new StdioServerTransport();

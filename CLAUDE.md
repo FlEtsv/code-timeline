@@ -138,6 +138,14 @@ falta en un scroll largo. Explorado primero como canvas de diseño
   nunca para dar por buena una propuesta tuya. Antes de proponer, mira
   `list_proposals` con `status: "rejected"`: si ya se descartó, el motivo está
   ahí y volver a proponerlo es hacerle perder el tiempo.
+- **Aceptar no es aplicar.** Una propuesta aceptada queda en `accepted`: está
+  aprobada, pero nadie ha escrito el código. Solo entra en el historial cuando
+  la escribes de verdad y lo confirmas con `mark_applied`, pasándole los
+  archivos REALES (lo aplicado casi nunca es idéntico a lo propuesto).
+- **Mira `list_proposals` con `status: "accepted"` al ponerte a trabajar en un
+  proyecto vinculado.** La web es una página en su localhost y no puede
+  avisarte de nada: si el usuario aceptó algo entre sesiones, esa lista es el
+  único sitio donde consta. Es trabajo comprometido y pendiente.
 - **Las claves de `data/` no se reescriben a mano.** Si necesitas migrar el
   esquema de `changes.json`, hazlo con un script (como
   `scripts/seed-demo.mjs`), nunca editando el JSON directamente: los datos son
