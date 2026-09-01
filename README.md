@@ -246,6 +246,26 @@ código del proyecto vinculado, así que tu historial no debe acabar dentro de
 este repo ni de ningún otro que compartas. Si quieres respaldarlo, hazlo en un
 repositorio privado tuyo.
 
+## Pruebas
+
+```bash
+npm test
+```
+
+35 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
+desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
+de estados de las propuestas con sus guardarraíles, y el ciclo de export e
+import incluida la fusión sin duplicados.
+
+Los tests apuntan `CODE_TIMELINE_DATA` a un directorio temporal, así que nunca
+tocan tu historial. Esa variable también te sirve para guardar tus datos fuera
+del repo:
+
+```bash
+CODE_TIMELINE_DATA=~/timelines code-timeline serve
+```
+
 ## Cómo está montado
 
 | Archivo | Qué hace |

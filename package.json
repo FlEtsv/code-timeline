@@ -40,7 +40,8 @@
   "scripts": {
     "start": "node bin/cli.mjs serve --port 4173",
     "demo": "node scripts/seed-demo.mjs",
-    "mcp": "node server.mjs"
+    "mcp": "node server.mjs",
+    "test": "node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

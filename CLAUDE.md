@@ -123,6 +123,14 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 (`/design`) antes de portarlo aquí — no rediseñar sin ese paso si se pide
 "mejorar el diseño" otra vez; es una decisión ya tomada, no un borrador.
 
+## Pruebas
+
+`npm test` (runner de `node:test`, sin dependencias). Si tocas `lib/store.mjs`,
+`lib/highlight.mjs`, `lib/markdown.mjs` o el ciclo de export/import, pásalas
+antes de dar nada por hecho — cubren justo lo que falla en silencio. Los tests
+escriben en un temporal vía `CODE_TIMELINE_DATA`; no los apuntes al `data/`
+real.
+
 ## Invariantes
 
 - **`add_change` con `relationType: "jump"` exige `relationNote`** — el store
