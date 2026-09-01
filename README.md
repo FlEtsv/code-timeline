@@ -108,6 +108,25 @@ code-timeline test <projectId> <changeId> --status auto --command "npm test -- c
 
 Claude lo registra con `set_test` cuando escribe o ejecuta la prueba.
 
+### Estado de QA de un arnés externo
+
+Si usas un arnés de QA (qabot o el que sea), puede dejar constancia de sus
+ejecuciones sin ensuciar el historial:
+
+```bash
+code-timeline qa --resultado verde|rojo [--comando "qabot ciclo"] [--entorno staging] [--detalle "..."]
+```
+
+Se guardan **aparte**, como estado del proyecto, y se ven en una tira sobre el
+historial. No son entradas: una entrada es una decisión de código con su
+porqué, y meter "batería verde en staging" cada vez lo llenaría de ruido hasta
+que dejara de poder leerse.
+
+Está pensado para llamarlo desde otro script: resuelve el proyecto por la ruta
+del repo (no hace falta saber el `projectId`) y, **si el repo no está
+vinculado, no hace nada y sale con 0**. Así quien lo invoque no depende de que
+Code Timeline esté instalado ni se le rompe el ciclo si falta.
+
 ### Exportar
 
 El botón **Imprimir / PDF** abre el diálogo del navegador sobre una versión

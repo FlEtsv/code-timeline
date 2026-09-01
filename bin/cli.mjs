@@ -2,6 +2,7 @@
 import {
   listProjects, getProject, createProject, listChanges, listByStatus,
   decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
+  findProjectByRepo, recordQaRun, listQaRuns,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { renderMarkdown } from '../lib/markdown.mjs';
@@ -114,6 +115,36 @@ switch (cmd) {
     break;
   }
 
+  // Pensado para que lo llame un arnés externo al terminar (qabot y
+  // compañía). Si el repo no está vinculado NO es un error: sale con 0 y sin
+  // ruido, para que quien lo invoque no tenga que saber nada de esto ni se
+  // rompa su ciclo por una herramienta que a lo mejor ni está.
+  case 'qa': {
+    const repo = flag('repo', rest) || process.cwd();
+    const proyecto = findProjectByRepo(repo);
+    if (!proyecto) break;
+
+    if (rest.includes('--listar')) {
+      const runs = listQaRuns(proyecto.id, Number(flag('limit', rest)) || 10);
+      if (!runs.length) { console.log('Sin ejecuciones de QA registradas.'); break; }
+      for (const r of runs) {
+        console.log(`${r.result === 'verde' ? '✔' : '✘'} ${r.at}  ${r.environment || '-'}  ${r.command}`);
+      }
+      break;
+    }
+
+    const result = flag('resultado', rest);
+    if (!result) { console.error('Uso: code-timeline qa --resultado verde|rojo [--comando "..."] [--entorno staging] [--detalle "..."] [--repo ruta]'); process.exit(1); }
+    const run = recordQaRun(proyecto.id, {
+      result,
+      command: flag('comando', rest),
+      environment: flag('entorno', rest),
+      detail: flag('detalle', rest),
+    });
+    console.log(`${proyecto.id}: QA ${run.result}${run.environment ? ' en ' + run.environment : ''}`);
+    break;
+  }
+
   case 'export': {
     const id = rest[0];
     if (!id) { console.error('Uso: code-timeline export <projectId> [--format json|md] [--out ruta]'); process.exit(1); }
@@ -198,6 +229,10 @@ Comandos:
                                         exporta el historial (json = respaldo, md = lectura)
   import <fichero.json> [--merge <projectId>] [--repo <ruta>]
                                         importa un export: proyecto nuevo, o fusiona en uno existente
+  qa --resultado verde|rojo [--comando "..."] [--entorno E] [--detalle "..."] [--repo ruta]
+                                        registra una ejecución de QA de un arnés externo
+                                        (--listar para verlas). Silencioso si el repo no
+                                        está vinculado: pensado para llamarlo desde otro script
   render <projectId>                    exporta un timeline.html estático (archivo)
   show <projectId>                      metadatos completos del proyecto (JSON)
 

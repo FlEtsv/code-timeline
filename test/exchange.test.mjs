@@ -110,3 +110,27 @@ test('el vallado del bloque crece si el código ya trae backticks', () => {
   assert.match(md, /````/);
   assert.ok(c.id);
 });
+
+test('el registro de QA vive aparte y no ensucia el historial', () => {
+  poblar();
+  store.recordQaRun(p.id, { result: 'verde', command: 'qabot ciclo', environment: 'staging' });
+  assert.equal(store.listChanges(p.id).length, 3, 'una ejecución de QA no es una entrada');
+  assert.equal(store.lastQaRun(p.id).result, 'verde');
+});
+
+test('un resultado que no sea verde o rojo se rechaza', () => {
+  assert.throws(() => store.recordQaRun(p.id, { result: 'regular' }), /verde, rojo/);
+});
+
+test('se conserva lo reciente, no todo', () => {
+  for (let i = 0; i < 25; i++) store.recordQaRun(p.id, { result: 'verde', command: `run ${i}` });
+  const runs = store.listQaRuns(p.id);
+  assert.equal(runs.length, 20, 'es un estado, no un archivo histórico');
+  assert.equal(runs[runs.length - 1].command, 'run 24');
+});
+
+test('el proyecto se encuentra por su ruta, aunque llegue por un enlace', () => {
+  assert.equal(store.findProjectByRepo(p.repoPath).id, p.id);
+  assert.equal(store.findProjectByRepo('/no/existe/en/ningun/sitio'), null);
+  assert.equal(store.findProjectByRepo(''), null);
+});
