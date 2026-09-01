@@ -141,6 +141,39 @@ otra máquina, y al fusionar compara por id, así que reimportar el mismo
 fichero dos veces no duplica nada. Como `data/` no se versiona, esto es lo
 único que hay entre tú y perder tus notas de revisión.
 
+## Junto a qabot
+
+[qabot](https://github.com/FlEtsv/qabot) es un arnés de QA y despliegue con su
+propio servidor MCP. Los dos juntos cierran un ciclo: **decides, se registra,
+se prueba, se despliega, y el resultado vuelve al historial.**
+
+```
+Claude / Codex ──> propone y registra ──> Code Timeline   (qué cambió y por qué)
+       │
+       └────────> prueba y despliega ──> qabot            (si funciona y dónde está)
+                          │
+                          └── el veredicto vuelve a Code Timeline
+```
+
+Instálalos como dos servidores MCP independientes:
+
+```bash
+claude mcp add --scope user code-timeline -- node /ruta/a/code-timeline/server.mjs
+claude mcp add --scope user qabot         -- node /ruta/a/qabot/mcp/servidor.mjs
+```
+
+Y en el PATH, para que qabot pueda registrar sus ciclos:
+
+```bash
+cd /ruta/a/code-timeline && npm link
+```
+
+**Ninguno de los dos necesita al otro.** qabot comprueba si `code-timeline`
+está en el PATH y si el repositorio está vinculado; si falta cualquiera de las
+dos cosas, sigue igual y no se entera. Code Timeline no sabe que qabot existe:
+solo recibe ejecuciones de QA de quien quiera mandárselas. Puedes usar
+cualquiera de los dos por separado sin instalar el otro.
+
 ## Requisitos
 
 - **Node.js 18 o superior.** Sin base de datos y sin dependencias en tiempo de
