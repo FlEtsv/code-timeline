@@ -14,6 +14,12 @@ historial se exporta a JSON (respaldo y traslado), a Markdown y a PDF.
 
 ![Timeline de un proyecto](docs/img/timeline.png)
 
+La página abre por **Pendiente**: lo que reclama algo tuyo — propuestas por
+decidir, aceptadas por escribir, cambios por revisar y pruebas en rojo. El
+libro completo vive en la pestaña **Historial**, y las propuestas descartadas
+en la suya. Imprimir saca las tres, esté abierta la que esté: una pestaña es
+un estado de pantalla, no del documento.
+
 ## Por qué, si ya existe `git log`
 
 No lo sustituye, lo complementa. Un commit agrupa varios cambios de una
