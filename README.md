@@ -155,7 +155,11 @@ Claude / Codex ──> propone y registra ──> Code Timeline   (qué cambió 
                           └── el veredicto vuelve a Code Timeline
 ```
 
-Instálalos como dos servidores MCP independientes:
+**Guía paso a paso: [INSTALACION-CONJUNTA.md](INSTALACION-CONJUNTA.md)** —
+requisitos, los dos servidores MCP, cómo comprobar que se hablan, qué hacer si
+algo no va, y cómo quitar uno sin tocar el otro.
+
+En corto, son dos servidores MCP independientes:
 
 ```bash
 claude mcp add --scope user code-timeline -- node /ruta/a/code-timeline/server.mjs
