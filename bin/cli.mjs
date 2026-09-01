@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import {
   listProjects, getProject, createProject, listChanges, listByStatus,
-  decideProposal, markApplied, exportProject, importProject, timelineHtmlPath,
+  decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { renderMarkdown } from '../lib/markdown.mjs';
@@ -25,7 +25,8 @@ function printProjects(projects) {
   for (const p of projects) {
     const prop = p.proposalCount ? `\n  propuestas: ${p.proposalCount} pendiente${p.proposalCount === 1 ? '' : 's'}` : '';
     const apl = p.acceptedCount ? `\n  por aplicar: ${p.acceptedCount}` : '';
-    console.log(`${p.id}\n  nombre:    ${p.name}\n  repo:      ${p.repoPath}\n  cambios:   ${p.changeCount}\n  revisados: ${p.verifiedCount}${prop}${apl}\n`);
+    const pru = `\n  probados:  ${p.testedCount}${p.failingCount ? ` (${p.failingCount} falla${p.failingCount === 1 ? '' : 'n'})` : ''}`;
+    console.log(`${p.id}\n  nombre:    ${p.name}\n  repo:      ${p.repoPath}\n  cambios:   ${p.changeCount}\n  revisados: ${p.verifiedCount}${pru}${prop}${apl}\n`);
   }
 }
 
@@ -95,6 +96,21 @@ switch (cmd) {
     if (!id || !changeId) { console.error('Uso: code-timeline applied <projectId> <changeId> [--commit sha]'); process.exit(1); }
     const out = markApplied(id, changeId, { commit: flag('commit', rest) });
     console.log(`${out.title}\n  ya es un cambio del historial, pendiente de revisar`);
+    break;
+  }
+
+  case 'test': {
+    const [id, changeId] = rest;
+    if (!id || !changeId) {
+      console.error('Uso: code-timeline test <projectId> <changeId> [--status auto|manual|failing|untested] [--command "..."] [--note "..."]');
+      process.exit(1);
+    }
+    const out = setTest(id, changeId, {
+      status: flag('status', rest),
+      command: flag('command', rest),
+      note: flag('note', rest),
+    });
+    console.log(`${out.title}\n  prueba: ${out.test.status}${out.test.command ? ' · ' + out.test.command : ''}`);
     break;
   }
 
@@ -176,6 +192,8 @@ Comandos:
                                         acepta o descarta una propuesta
   applied <projectId> <changeId> [--commit sha]
                                         confirma que una aceptada ya está escrita
+  test <projectId> <changeId> [--status auto|manual|failing] [--command "..."] [--note "..."]
+                                        registra cómo se comprueba un cambio
   export <projectId> [--format json|md] [--out ruta|-]
                                         exporta el historial (json = respaldo, md = lectura)
   import <fichero.json> [--merge <projectId>] [--repo <ruta>]

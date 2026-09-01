@@ -84,6 +84,24 @@ líneas resaltadas marcan dónde iría, y el código propuesto va al lado.
 
 ![Vista completa de una propuesta](docs/img/propuesta-completa.png)
 
+### Cómo sabes que un cambio funciona
+
+Revisar y probar no son lo mismo, y el historial los guarda por separado:
+**revisado** es que lo has leído; **prueba** es que algo lo ha ejecutado. Un
+cambio puede estar revisado y sin probar, y saber cuál de las dos falta es la
+mitad de la pregunta al mirar un historial ajeno.
+
+Cada entrada lleva su estado de prueba — *sin probar*, *prueba automática*
+(con el comando que la repite), *probado a mano* (con cómo), o **falla**. Ese
+último existe a propósito: un historial donde solo cabe lo que funciona miente
+por omisión, y el contador de arriba se pone en rojo mientras haya alguno.
+
+```bash
+code-timeline test <projectId> <changeId> --status auto --command "npm test -- carrito"
+```
+
+Claude lo registra con `set_test` cuando escribe o ejecuta la prueba.
+
 ### Exportar
 
 El botón **Imprimir / PDF** abre el diálogo del navegador sobre una versión
@@ -185,6 +203,7 @@ code-timeline changes <projectId>         lista los cambios registrados
 code-timeline proposals <projectId>       pendientes (--accepted: sin aplicar; --rejected: descartadas)
 code-timeline decide <id> <changeId> accept|reject [--note "..."]
 code-timeline applied <id> <changeId> [--commit sha]
+code-timeline test <id> <changeId> [--status auto|manual|failing] [--command "..."] [--note "..."]
 code-timeline export <projectId> [--format json|md] [--out ruta|-]
 code-timeline import <fichero.json> [--merge <projectId>] [--repo <ruta>]
 code-timeline render <projectId>          exporta un timeline.html estático
@@ -203,6 +222,7 @@ code-timeline show <projectId>            metadatos del proyecto (JSON)
 | `list_changes` | El historial, en orden cronológico |
 | `list_proposals` | Las pendientes, o las descartadas con su motivo |
 | `decide_proposal` | Acepta o descarta (solo si se lo pides tú) |
+| `set_test` | Registra cómo se comprueba un cambio, o que su prueba falla |
 | `mark_applied` | Confirma que una aceptada ya está escrita: pasa al historial |
 | `export_project` | Escribe el historial a JSON o Markdown |
 | `import_project` | Lee un JSON exportado: proyecto nuevo o fusión |

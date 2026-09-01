@@ -150,6 +150,10 @@ real.
   aprobada, pero nadie ha escrito el código. Solo entra en el historial cuando
   la escribes de verdad y lo confirmas con `mark_applied`, pasándole los
   archivos REALES (lo aplicado casi nunca es idéntico a lo propuesto).
+- **Registra la prueba con `set_test` cuando escribas o ejecutes una que cubra
+  un cambio**, y di la verdad: si falla, `status: "failing"`. Probar no es
+  revisar — revisar es que el usuario lo lea, probar es que algo lo ejecute —,
+  y `status: "auto"` exige el comando, porque sin él la prueba no se repite.
 - **Mira `list_proposals` con `status: "accepted"` al ponerte a trabajar en un
   proyecto vinculado.** La web es una página en su localhost y no puede
   avisarte de nada: si el usuario aceptó algo entre sesiones, esa lista es el

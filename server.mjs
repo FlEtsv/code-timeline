@@ -6,7 +6,7 @@ import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   listProjects, getProject, createProject,
-  listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied,
+  listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied, setTest,
   exportProject, importProject, timelineHtmlPath,
 } from './lib/store.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
@@ -86,6 +86,11 @@ server.registerTool(
       date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
       relationType: z.enum(['continuation', 'jump', 'start']).optional(),
       relationNote: z.string().optional().describe('Obligatorio si relationType="jump": explica qué distingue este cambio del anterior'),
+      test: z.object({
+        status: z.enum(['untested', 'auto', 'manual', 'failing']),
+        command: z.string().optional(),
+        note: z.string().optional(),
+      }).optional().describe('Cómo se comprueba el cambio, si ya lo sabes. Si no, regístralo luego con set_test'),
     },
   },
   async (args) => text(addChange(args.projectId, args)),
@@ -283,6 +288,28 @@ server.registerTool(
     },
   },
   async ({ projectId, changeId, files, commit, note }) => text(markApplied(projectId, changeId, { files, commit, note })),
+);
+
+server.registerTool(
+  'set_test',
+  {
+    title: 'Registrar cómo se comprueba un cambio',
+    description:
+      'Deja constancia de cómo se prueba una entrada del historial. Es distinto de "revisado": revisar es que el ' +
+      'usuario lo haya leído; probar es que algo lo haya ejecutado. Un cambio puede estar revisado y sin probar. ' +
+      'Llámalo cuando escribas o ejecutes una prueba que cubra el cambio, y di la verdad: si el test falla, ' +
+      'status="failing" — un historial donde solo consta lo que funciona miente por omisión. ' +
+      'status="auto" exige el comando que la ejecuta: sin él la prueba no se puede repetir.',
+    inputSchema: {
+      projectId: z.string(),
+      changeId: z.string(),
+      status: z.enum(['untested', 'auto', 'manual', 'failing']).optional()
+        .describe('"auto" (hay test y pasa), "manual" (comprobado a mano), "failing" (probado y falla), "untested"'),
+      command: z.string().optional().describe('El comando que ejecuta la prueba, ej. npm test -- carrito. Obligatorio con status="auto"'),
+      note: z.string().optional().describe('Qué cubre la prueba, o cómo se comprobó a mano y con qué datos'),
+    },
+  },
+  async ({ projectId, changeId, status, command, note }) => text(setTest(projectId, changeId, { status, command, note })),
 );
 
 const transport = new StdioServerTransport();
