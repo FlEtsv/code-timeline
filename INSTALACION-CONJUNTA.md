@@ -59,7 +59,7 @@ después**, porque las rutas quedan escritas en la configuración del agente.
 ```bash
 cd ~/herramientas/code-timeline
 npm install
-npm test          # 49 pruebas — si fallan, no sigas
+npm test          # 70 pruebas — si fallan, no sigas
 npm link          # deja "code-timeline" en el PATH
 ```
 
@@ -230,6 +230,10 @@ Todo en tu máquina, y nada se publica:
 | Historial y notas | `code-timeline/data/` | **no** — `.gitignore` |
 | Registro de QA | `code-timeline/data/projects/<id>/qa.json` | **no** |
 | Config de qabot | `.qabot.json` de cada proyecto | **no** — lleva tokens |
+
+Esas rutas son las de esta guía, que instala Code Timeline **clonando el
+repositorio**. Instalado como paquete de npm, los datos van a
+`~/.code-timeline`; `CODE_TIMELINE_DATA` manda por encima de las dos.
 
 Como `data/` no se versiona, tu único respaldo del historial es el export:
 

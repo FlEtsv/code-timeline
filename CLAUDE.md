@@ -90,8 +90,21 @@ archivo ya no existe ahí (renombrado/borrado), cae a
 ## Arquitectura (para cuando haya que tocar el código de esta herramienta)
 
 - `lib/store.mjs` — toda la persistencia. JSON plano, sin base de datos:
-  `data/projects.json` (registro) + `data/projects/<id>/changes.json` (una
-  lista por proyecto). Se versiona en git — es el propio historial.
+  `projects.json` (registro) + `projects/<id>/changes.json` (una lista por
+  proyecto), dentro del directorio de datos. **No se versiona** (ver los
+  invariantes). Escribe de forma atómica (fichero temporal + rename) dejando
+  un `.bak`, y envuelve el ciclo entero de leer-modificar-escribir en un
+  candado entre procesos (`.lock` con `wx`, caducidad de 10 s): el servidor
+  MCP y la web escriben los mismos ficheros a la vez. Si el JSON principal no
+  se puede leer, se recupera del `.bak` y aparta el ilegible como `.corrupto`
+  — nunca devuelve una lista vacía, porque el siguiente guardado la
+  consolidaría.
+- `lib/datadir.mjs` — **dónde** vive todo eso, resuelto en un solo sitio y
+  compartido por `store.mjs` y `webproc.mjs`: `CODE_TIMELINE_DATA` si está
+  definida; si no, `data/` del repo cuando se ejecuta desde un clon (hay
+  `.git` y la ruta no pasa por `node_modules`); si no, `~/.code-timeline`.
+  La tercera regla existe porque instalado por npm los datos caían dentro de
+  `node_modules` y un `npm update` los borraba.
 - `lib/render.mjs` — genera HTML completo (ya no fragmentos para Artifact):
   `renderTimelineHtml(project, changes)`, `renderChangeDetailHtml(project,
   changes, index, firstFileHtml)` (la pantalla completa), `renderIndexHtml
@@ -100,15 +113,25 @@ archivo ya no existe ahí (renombrado/borrado), cae a
   de archivo).
 - `lib/repofile.mjs` — `readFileAtCommit(repoPath, file, commit)`: lee el
   working tree actual, cae a `git show` solo si el archivo ya no existe ahí.
-- `lib/httpserver.mjs` — servidor `http` nativo, sin framework. Rutas: `GET /`,
-  `GET /p/:id`, `GET /p/:id/c/:changeId` (pantalla completa),
+- `lib/httpserver.mjs` — servidor `http` nativo, sin framework. Escucha en
+  `127.0.0.1` por defecto: exponerlo a la red es una decisión explícita
+  (`serve --host`), porque la API de escritura no pide credenciales y quien
+  abra la página lee el código y las notas. Rutas: `GET /`, `GET /p/:id`,
+  `GET /p/:id/c/:changeId` (pantalla completa),
+  `GET /p/:id/export.json|md` (descarga),
+  `POST /api/projects/:id/changes/:changeId/decision` (aceptar/descartar),
   `PATCH /api/projects/:id/changes/:changeId`,
   `GET /api/projects/:id/changes/:changeId/files/:fileIndex` (contenido de
   un archivo, usado por la pantalla completa al cambiar de pestaña).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
 - `bin/cli.mjs` — CLI para el usuario: `serve`, `projects`, `link`,
-  `changes`, `render`, `show`.
+  `changes`, `proposals`, `decide`, `applied`, `test`, `qa`, `export`,
+  `import`, `render`, `show`, `doctor`. Cuando algo no cuadre en un proyecto
+  vinculado (la web no carga un archivo, los datos parecen otros), `doctor` es
+  el primer sitio donde mirar: dice el directorio en uso y por qué regla, si
+  el `repoPath` de cada proyecto sigue existiendo, y si quedaron restos de una
+  escritura a medias.
 
 **Diseño visual** (por si regeneras algo a mano, `lib/render.mjs`): un "libro
 de cambios" — Source Serif 4 para títulos/folios, Public Sans para cuerpo,
@@ -125,11 +148,14 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias). Si tocas `lib/store.mjs`,
-`lib/highlight.mjs`, `lib/markdown.mjs` o el ciclo de export/import, pásalas
-antes de dar nada por hecho — cubren justo lo que falla en silencio. Los tests
-escriben en un temporal vía `CODE_TIMELINE_DATA`; no los apuntes al `data/`
-real.
+`npm test` (runner de `node:test`, sin dependencias, 70 casos). Si tocas
+`lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
+`lib/httpserver.mjs` o el ciclo de export/import, pásalas antes de dar nada
+por hecho — cubren justo lo que falla en silencio: el almacén con un fichero a
+medias o corrupto y con tres procesos escribiendo a la vez, las tres reglas
+del directorio de datos, y que el servidor web no queda escuchando en todas
+las interfaces. Los tests escriben en un temporal vía `CODE_TIMELINE_DATA`; no
+los apuntes al `data/` real.
 
 ## Invariantes
 

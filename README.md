@@ -1,5 +1,9 @@
 # Code Timeline
 
+[![Integración continua](https://github.com/FlEtsv/code-timeline/actions/workflows/ci.yml/badge.svg)](https://github.com/FlEtsv/code-timeline/actions/workflows/ci.yml)
+[![Node 18+](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![Licencia: Apache 2.0 + Commons Clause](https://img.shields.io/badge/licencia-Apache--2.0%20%2B%20Commons%20Clause-blue)](LICENSE)
+
 Un libro de cambios de tu código, en el orden en que se hicieron y con el
 porqué de cada uno. Claude Code registra cada cambio mientras trabaja —
 el método o la función que tocó, en qué archivos, el antes y el después, y la
@@ -9,8 +13,10 @@ También puede **proponer** cambios que no ha hecho: aparecen aparte, y tú los
 aceptas o los descartas. Lo hecho y lo sugerido nunca se mezclan.
 
 Todo corre en tu máquina: un servidor MCP para que Claude escriba, y una web
-local en `localhost` para que tú leas. Nada se publica en ninguna parte. El
-historial se exporta a JSON (respaldo y traslado), a Markdown y a PDF.
+local en `localhost` para que tú leas. Nada se publica en ninguna parte — la
+web escucha solo en `127.0.0.1`, así que ni siquiera se ve desde otro equipo
+de tu red salvo que lo pidas tú con `--host`. El historial se exporta a JSON
+(respaldo y traslado), a Markdown y a PDF.
 
 ![Timeline de un proyecto](docs/img/timeline.png)
 
@@ -115,6 +121,7 @@ ejecuciones sin ensuciar el historial:
 
 ```bash
 code-timeline qa --resultado verde|rojo [--comando "qabot ciclo"] [--entorno staging] [--detalle "..."]
+code-timeline qa --listar [--limit N]     # las últimas ejecuciones registradas
 ```
 
 Se guardan **aparte**, como estado del proyecto, y se ven en una tira sobre el
@@ -123,8 +130,9 @@ porqué, y meter "batería verde en staging" cada vez lo llenaría de ruido hast
 que dejara de poder leerse.
 
 Está pensado para llamarlo desde otro script: resuelve el proyecto por la ruta
-del repo (no hace falta saber el `projectId`) y, **si el repo no está
-vinculado, no hace nada y sale con 0**. Así quien lo invoque no depende de que
+del repo — el directorio actual, o el que le digas con `--repo`, sin que haga
+falta saber el `projectId` — y, **si el repo no está vinculado, no hace nada y
+sale con 0**. Así quien lo invoque no depende de que
 Code Timeline esté instalado ni se le rompe el ciclo si falta.
 
 ### Exportar
@@ -258,18 +266,21 @@ de un diff.
 ## El CLI
 
 ```
-code-timeline serve [--port N] [--open]   levanta la web (viva, con notas)
+code-timeline serve [--port N] [--host H] [--open]   levanta la web (viva, con notas)
 code-timeline projects                    lista los proyectos vinculados
-code-timeline link --name N --path P      vincula un proyecto
-code-timeline changes <projectId>         lista los cambios registrados
+code-timeline link --name N --path P [--remote R]   vincula un proyecto
+code-timeline changes <projectId> [--limit N]       lista los cambios registrados
 code-timeline proposals <projectId>       pendientes (--accepted: sin aplicar; --rejected: descartadas)
 code-timeline decide <id> <changeId> accept|reject [--note "..."]
 code-timeline applied <id> <changeId> [--commit sha]
-code-timeline test <id> <changeId> [--status auto|manual|failing] [--command "..."] [--note "..."]
+code-timeline test <id> <changeId> [--status untested|auto|manual|failing] [--command "..."] [--note "..."]
+code-timeline qa --resultado verde|rojo [--comando "..."] [--entorno E] [--detalle "..."] [--repo ruta]
+code-timeline qa --listar [--limit N]     ejecuciones de QA de un arnés externo
 code-timeline export <projectId> [--format json|md] [--out ruta|-]
 code-timeline import <fichero.json> [--merge <projectId>] [--repo <ruta>]
 code-timeline render <projectId>          exporta un timeline.html estático
 code-timeline show <projectId>            metadatos del proyecto (JSON)
+code-timeline doctor                      diagnóstico: dónde están los datos y por qué
 ```
 
 ## Las herramientas MCP
@@ -304,14 +315,36 @@ de defenderse de un historial que no se puede leer.
 
 ## Dónde viven tus datos
 
-En `data/`, y en ningún sitio más:
+En un solo directorio, y en ningún sitio más:
 
 ```
-data/
-  projects.json                    los proyectos vinculados
-  projects/<id>/changes.json       cambios, propuestas, notas y qué has revisado
-  projects/<id>/timeline.html      export estático (se regenera; no se versiona)
+projects.json                    los proyectos vinculados
+projects/<id>/changes.json       cambios, propuestas, notas y qué has revisado
+projects/<id>/qa.json            las últimas ejecuciones de QA
+projects/<id>/timeline.html      export estático (se regenera; no se versiona)
 ```
+
+Cuál es ese directorio depende de cómo lo hayas instalado, y se decide en este
+orden:
+
+| | Directorio de datos |
+|---|---|
+| `CODE_TIMELINE_DATA` está definida | lo que diga ella |
+| Trabajas desde un clon de este repo | `data/` dentro del propio repo |
+| Instalado como paquete (npm, global) | `~/.code-timeline` |
+
+La tercera regla no es un detalle: si los datos colgaran del paquete
+instalado, un `npm update` se llevaría por delante tu historial. Si no sabes
+en cuál de los tres casos estás, `code-timeline projects` te dice la ruta en
+uso cuando todavía no hay ningún proyecto vinculado.
+
+Cada fichero se guarda **de forma atómica** (se escribe aparte y se renombra
+encima), dejando al lado un `.bak` con la versión anterior, y el ciclo entero
+de leer-modificar-escribir va bajo un candado: el servidor MCP y la web
+escriben los mismos ficheros a la vez, y sin eso una marca de "revisado" podía
+borrar un cambio recién registrado. Si el fichero principal apareciera
+corrupto, se recupera solo del `.bak` y aparta el ilegible como `.corrupto` en
+vez de arrancar con el historial vacío.
 
 Cambios y propuestas comparten fichero y comparten id. Una entrada recorre sus
 estados sin moverse de sitio, así que nunca pierde su antes/después ni la nota
@@ -334,11 +367,14 @@ repositorio privado tuyo.
 npm test
 ```
 
-35 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+70 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
-de estados de las propuestas con sus guardarraíles, y el ciclo de export e
-import incluida la fusión sin duplicados.
+de estados de las propuestas con sus guardarraíles, el ciclo de export e
+import incluida la fusión sin duplicados, la resolución del directorio de
+datos en sus tres casos, y el almacén bajo presión — un fichero a medias, uno
+corrupto que se recupera de la copia, y tres procesos de verdad escribiendo a
+la vez sin perder ninguna entrada.
 
 Los tests apuntan `CODE_TIMELINE_DATA` a un directorio temporal, así que nunca
 tocan tu historial. Esa variable también te sirve para guardar tus datos fuera
