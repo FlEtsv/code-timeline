@@ -15,7 +15,7 @@ esta no lo es y es mejor saberlo antes de invertir una tarde.
 
 ```bash
 npm install
-npm test          # 70 pruebas, runner de node:test, sin dependencias
+npm test          # 74 pruebas, runner de node:test, sin dependencias
 npm run demo      # siembra el proyecto de ejemplo
 npm start         # levanta la web en localhost:4173
 ```

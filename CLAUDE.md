@@ -148,7 +148,7 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias, 70 casos). Si tocas
+`npm test` (runner de `node:test`, sin dependencias, 74 casos). Si tocas
 `lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
 `lib/httpserver.mjs` o el ciclo de export/import, pásalas antes de dar nada
 por hecho — cubren justo lo que falla en silencio: el almacén con un fichero a

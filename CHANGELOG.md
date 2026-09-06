@@ -20,7 +20,7 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   levantar la web.
 - Export a **PDF** desde el navegador, con hoja de estilo propia para papel.
 - Registro de ejecuciones de **QA de un arnés externo**, aparte del historial.
-- **70 pruebas** con el runner de Node, sin dependencias.
+- **74 pruebas** con el runner de Node, sin dependencias.
 
 ### Añadido antes del lanzamiento
 

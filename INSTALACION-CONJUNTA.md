@@ -59,7 +59,7 @@ después**, porque las rutas quedan escritas en la configuración del agente.
 ```bash
 cd ~/herramientas/code-timeline
 npm install
-npm test          # 70 pruebas — si fallan, no sigas
+npm test          # 74 pruebas — si fallan, no sigas
 npm link          # deja "code-timeline" en el PATH
 ```
 
