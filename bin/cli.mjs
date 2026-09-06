@@ -7,8 +7,10 @@ import {
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { renderMarkdown } from '../lib/markdown.mjs';
 import { startServer } from '../lib/httpserver.mjs';
-import { writeFileSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { DATA_DIR, DATA_DIR_REASON } from '../lib/datadir.mjs';
+import { webStatus } from '../lib/webproc.mjs';
+import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 
 const [, , cmd, ...rest] = process.argv;
@@ -18,9 +20,22 @@ function flag(name, args) {
   return i === -1 ? undefined : args[i + 1];
 }
 
+// spawn no lanza al fallar: si el programa no existe (un Linux sin xdg-open),
+// lo cuenta con un evento 'error', y un 'error' sin escuchador tumba el
+// proceso. Sin este on('error') el servidor se caería justo tras arrancar.
+function abrirEn(comando, args) {
+  const hijo = spawn(comando, args, { stdio: 'ignore', detached: true });
+  hijo.on('error', () => {});
+  hijo.unref();
+}
+
 function printProjects(projects) {
   if (!projects.length) {
     console.log('Sin proyectos vinculados todavía. Usa: code-timeline link --name "..." --path "..."');
+    // Aquí es donde hace falta saberlo: si la lista sale vacía y el usuario
+    // esperaba sus proyectos, lo primero que hay que descartar es que esté
+    // mirando otro almacén (CODE_TIMELINE_DATA, o instalado fuera del repo).
+    console.log(`Datos en: ${DATA_DIR}`);
     return;
   }
   for (const p of projects) {
@@ -29,6 +44,54 @@ function printProjects(projects) {
     const pru = `\n  probados:  ${p.testedCount}${p.failingCount ? ` (${p.failingCount} falla${p.failingCount === 1 ? '' : 'n'})` : ''}`;
     console.log(`${p.id}\n  nombre:    ${p.name}\n  repo:      ${p.repoPath}\n  cambios:   ${p.changeCount}\n  revisados: ${p.verifiedCount}${pru}${prop}${apl}\n`);
   }
+}
+
+// ── doctor ──────────────────────────────────────────────────
+// Las tres reglas de lib/datadir.mjs, dichas para quien no ha leído el código.
+// Saber en qué carpeta está el almacén no sirve de nada sin saber POR QUÉ: eso
+// es lo que dice si hay que tocar la variable de entorno, mudarse de clon, o
+// nada.
+const MOTIVOS_DATOS = {
+  env: 'la variable de entorno CODE_TIMELINE_DATA',
+  clon: 'el clon del repositorio (hay un .git en la raíz)',
+  perfil: 'el directorio del perfil del usuario (instalado, sin clon a la vista)',
+};
+
+function nodeMinimo() {
+  try {
+    const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    return pkg.engines && pkg.engines.node;
+  } catch {
+    return undefined;
+  }
+}
+
+// Restos de una escritura que fue mal. El almacén los deja a propósito (el
+// fichero ilegible es la prueba de qué pasó), pero no los explica en ningún
+// sitio, y a ojo no se distingue el bueno del apartado. Cada hallazgo viene
+// con la línea de qué hacer con él.
+function restosDelAlmacen(dir) {
+  const hallazgos = [];
+  const pendientes = [dir];
+  while (pendientes.length) {
+    const actual = pendientes.pop();
+    let entradas;
+    try { entradas = readdirSync(actual, { withFileTypes: true }); } catch { continue; }
+    for (const e of entradas) {
+      const ruta = join(actual, e.name);
+      if (e.isDirectory()) { pendientes.push(ruta); continue; }
+      if (e.name.endsWith('.corrupto')) {
+        const bueno = ruta.replace(/\.corrupto$/, '');
+        hallazgos.push({ ruta, aviso: `El historial bueno ya está en ${bueno}: se restauró solo desde la copia .bak. Esto es la versión ilegible que se apartó; puedes borrarla.` });
+      } else if (e.name.endsWith('.lock')) {
+        hallazgos.push({ ruta, aviso: 'Bloqueo puesto. Si no hay nada escribiendo ahora mismo (ni el servidor MCP ni la web), bórralo y vuelve a intentarlo.' });
+      } else if (e.name.endsWith('.bak') && !existsSync(ruta.replace(/\.bak$/, ''))) {
+        const principal = ruta.replace(/\.bak$/, '');
+        hallazgos.push({ ruta, aviso: `Falta su fichero principal (${principal}). Cópialo con ese nombre para recuperar el historial.` });
+      }
+    }
+  }
+  return hallazgos;
 }
 
 switch (cmd) {
@@ -192,11 +255,23 @@ switch (cmd) {
   case 'serve': {
     const portArg = flag('port', rest);
     const port = portArg ? Number(portArg) : 4173;
-    const server = await startServer({ port });
+    const host = flag('host', rest) || '127.0.0.1';
+    const server = await startServer({ port, host });
     const url = `http://localhost:${port}`;
     console.log(`code-timeline corriendo en ${url}  (Ctrl+C para parar)`);
-    if (rest.includes('--open') && process.platform === 'darwin') {
-      spawn('open', [url], { stdio: 'ignore', detached: true }).unref();
+    // Salir de la máquina no puede pasar en silencio: aquí se sirve el código
+    // del usuario y sus notas, y la API de escritura no pide credenciales.
+    if (host !== '127.0.0.1' && host !== 'localhost') {
+      console.log(`AVISO: escuchando en ${host} — la web queda accesible desde otros equipos de la red, y quien la abra puede leer tu código y tus notas y marcar cambios como revisados.`);
+    }
+    if (rest.includes('--open')) {
+      if (process.platform === 'win32') {
+        abrirEn('cmd', ['/c', 'start', '', url]);
+      } else if (process.platform === 'darwin') {
+        abrirEn('open', [url]);
+      } else {
+        abrirEn('xdg-open', [url]);
+      }
     }
     process.on('SIGINT', () => { server.close(() => process.exit(0)); });
     break;
@@ -209,11 +284,84 @@ switch (cmd) {
     break;
   }
 
+  // Lo que rompe en silencio, en una sola pantalla: mirar un almacén que no es
+  // el que uno cree, un repositorio que se movió (la web deja de enseñar los
+  // archivos y hoy eso solo se ve entrando cambio a cambio), o restos de una
+  // escritura que fue mal. Sale con 1 si hay algo que arreglar, para que un
+  // script pueda usarlo.
+  case 'doctor': {
+    const problemas = [];
+    const linea = (ok, texto) => console.log(`  ${ok ? '✔' : '✘'} ${texto}`);
+
+    console.log('code-timeline doctor\n');
+
+    console.log('Datos');
+    console.log(`  directorio: ${DATA_DIR}`);
+    console.log(`  regla:      ${MOTIVOS_DATOS[DATA_DIR_REASON] || DATA_DIR_REASON}`);
+    // Se comprueba ANTES de listar proyectos: listProjects crea el directorio,
+    // y entonces ya no se distinguiría un almacén nuevo de uno de siempre.
+    if (!existsSync(DATA_DIR)) console.log('  aún no existe: se crea al vincular el primer proyecto');
+    console.log('');
+
+    const minimo = nodeMinimo();
+    const mayorMinimo = minimo ? Number((minimo.match(/\d+/) || [])[0]) : NaN;
+    const cumpleNode = Number.isNaN(mayorMinimo) || Number(process.versions.node.split('.')[0]) >= mayorMinimo;
+    console.log('Node');
+    console.log(`  versión: ${process.version}${minimo ? `   mínimo declarado: ${minimo}` : ''}`);
+    linea(cumpleNode, cumpleNode ? 'la versión vale' : `por debajo del mínimo (${minimo}): actualiza node`);
+    if (!cumpleNode) problemas.push('node por debajo del mínimo');
+    console.log('');
+
+    console.log('Proyectos');
+    let proyectos = null;
+    try {
+      proyectos = listProjects();
+    } catch (e) {
+      linea(false, `no se puede leer el registro de proyectos: ${e.message}`);
+      problemas.push('registro de proyectos ilegible');
+    }
+    if (proyectos) {
+      console.log(`  vinculados: ${proyectos.length}`);
+      for (const p of proyectos) {
+        const hay = existsSync(p.repoPath);
+        linea(hay, `${p.id} → ${p.repoPath}${hay ? '' : '   el repositorio ya no está ahí'}`);
+        if (!hay) {
+          console.log('     La web no podrá enseñar los archivos de sus cambios. Vuelve a vincularlo con la ruta nueva: code-timeline link --name "..." --path "..."');
+          problemas.push(`repositorio ausente: ${p.id}`);
+        }
+      }
+    }
+    console.log('');
+
+    console.log('Almacén');
+    const restos = existsSync(DATA_DIR) ? restosDelAlmacen(DATA_DIR) : [];
+    if (!restos.length) linea(true, 'sin restos de escrituras a medias');
+    for (const r of restos) {
+      linea(false, r.ruta);
+      console.log(`     ${r.aviso}`);
+      problemas.push(`resto en el almacén: ${r.ruta}`);
+    }
+    console.log('');
+
+    console.log('Web');
+    const web = webStatus();
+    console.log(web
+      ? `  ✔ corriendo en ${web.url} (puerto ${web.port}, pid ${web.pid})`
+      : '  · parada. Se levanta con: code-timeline serve --port 4173');
+    console.log('');
+
+    if (!problemas.length) { console.log('Todo correcto.'); break; }
+    console.log(`${problemas.length} problema${problemas.length === 1 ? '' : 's'} que revisar.`);
+    process.exit(1);
+  }
+
   default:
     console.log(`code-timeline — historial visual de cambios de código
 
 Comandos:
-  serve [--port N] [--open]             levanta la web en localhost (viva, con notas)
+  serve [--port N] [--host H] [--open]  levanta la web en localhost (viva, con notas)
+                                        --host por defecto 127.0.0.1: solo tu máquina.
+                                        Otro valor la abre a la red local
   projects                              lista proyectos vinculados
   link --name N --path P [--remote R]   vincula un proyecto nuevo
   changes <projectId> [--limit N]       lista los cambios registrados
@@ -223,7 +371,7 @@ Comandos:
                                         acepta o descarta una propuesta
   applied <projectId> <changeId> [--commit sha]
                                         confirma que una aceptada ya está escrita
-  test <projectId> <changeId> [--status auto|manual|failing] [--command "..."] [--note "..."]
+  test <projectId> <changeId> [--status untested|auto|manual|failing] [--command "..."] [--note "..."]
                                         registra cómo se comprueba un cambio
   export <projectId> [--format json|md] [--out ruta|-]
                                         exporta el historial (json = respaldo, md = lectura)
@@ -235,6 +383,10 @@ Comandos:
                                         está vinculado: pensado para llamarlo desde otro script
   render <projectId>                    exporta un timeline.html estático (archivo)
   show <projectId>                      metadatos completos del proyecto (JSON)
+  doctor                                diagnóstico: dónde están los datos y por qué,
+                                        versión de node, repositorios que ya no están,
+                                        restos del almacén y estado de la web.
+                                        Sale con 1 si encuentra algo que arreglar
 
 Para AÑADIR cambios y propuestas (con diff antes/después y explicación), se
 hace desde Claude Code vía el servidor MCP — es quien redacta cada entrada
