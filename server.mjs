@@ -70,6 +70,8 @@ server.registerTool(
     title: 'Registrar un cambio de código YA APLICADO',
     description:
       'SOLO para código que ya has escrito en el repo. Si todavía no lo has tocado y lo que quieres es sugerirlo, usa propose_change. ' +
+      'Se registra TODO cambio de código, sin filtrar por importancia: un renombrado, un texto de UI o un ajuste de formato ' +
+      'llevan entrada igual que un refactor — no decides tú qué merece constar, y si el motivo es que lo pidió el usuario, eso es lo que va en explanation. ' +
       'Añade una entrada al timeline de un proyecto: qué método/clase/atributo cambió, en qué archivo(s) — puede tocar más de uno —, ' +
       'el código antes y después de cada archivo, y por qué. Deja el código lo más completo posible, sin truncar con "...": ' +
       'el mini-editor de la web ya deja ver el archivo entero, pero el antes/después es lo primero que se lee y debe bastar por sí solo. ' +
@@ -165,8 +167,9 @@ server.registerTool(
       'Registra una PROPUESTA: código que crees que habría que cambiar pero que no has tocado. Aparece aparte del historial, ' +
       'arriba, esperando que el usuario la acepte o la descarte desde la web. Aceptada, pasa a ser un cambio del historial; ' +
       'descartada, se archiva con el motivo. ' +
-      'Úsalo cuando veas algo mejorable fuera del encargo, cuando haya más de un camino razonable y quieras que elija, ' +
-      'o cuando el cambio sea lo bastante grande como para acordarlo antes de escribirlo. ' +
+      'Úsalo SIEMPRE que sugieras una mejora: algo fuera del encargo, un camino alternativo que quieras que elija, ' +
+      'o un cambio lo bastante grande como para acordarlo antes de escribirlo. Una sugerencia que solo dices en la respuesta ' +
+      'se pierde al cerrar el chat; registrada, el usuario la acepta o la descarta cuando quiera. ' +
       'El "después" es el código que PROPONES, no el que existe: la vista a pantalla completa avisa de ello. ' +
       'Si el cambio ya está hecho, la herramienta correcta es add_change.',
     inputSchema: {

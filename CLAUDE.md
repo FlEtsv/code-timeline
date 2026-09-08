@@ -37,13 +37,21 @@ en cualquier proyecto, sin tener que abrir este repo. Herramientas:
   como respaldo legible en git). La vista viva es el servidor, no esto.
 - `list_changes` / `get_project` — consulta.
 
-**Cuándo registrar**: cada vez que edites código de verdad en un proyecto
-vinculado, llama a `add_change` justo después del cambio, mientras el motivo
-está fresco — no al final de la sesión intentando reconstruirlo.
+**Cuándo registrar**: siempre que edites código en un proyecto vinculado,
+sea grande o mínimo. Llama a `add_change` justo después del cambio, mientras
+el motivo está fresco — no al final de la sesión intentando reconstruirlo.
+Un renombrado, un texto de UI o un ajuste de formato se registran igual que un
+refactor: el agente no filtra qué merece constar, porque un cambio sin entrada
+es un cambio que el usuario no puede revisar. Si el motivo es simplemente que
+lo pidió el usuario, eso es lo que va en `explanation`.
 
-**Cuándo NO registrar**: exploración, lectura, tests que no tocan código de
-producto, cambios triviales sin decisión detrás (typos). Esto es un historial
-de *decisiones de código*, no un log de cada tecla.
+Con las propuestas, lo mismo: cualquier mejora que sugieras — aunque sea de
+pasada, al final de una respuesta — va con `propose_change`, para que el
+usuario pueda aceptarla o descartarla en la web en vez de perderla al cerrar
+el chat.
+
+**Cuándo NO registrar**: solo lo que no toca código — explorar, leer,
+responder preguntas, levantar el servidor.
 
 ## Cuando te pidan "la web" / "dame el timeline" / "levanta el servidor"
 
