@@ -63,6 +63,9 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
 - Arreglado: nombrar un proyecto por su **ruta** escribía en una carpeta
   inventada (`data/projects/Users/…`) devolviendo éxito. `projectDir` canoniza
   el id antes de construir la ruta.
+- **`scripts/medir-coste.mjs`** (`npm run coste`): mide sobre TUS transcripts de
+  Claude Code cuánto encarece la herramienta una sesión, leyendo el `usage`
+  real. El número del README se rehace con un comando en vez de creérselo.
 - **`test/coste.test.mjs`**: pruebas que miden el coste en tokens y fallan si
   alguien encarece la herramienta. Incluye un informe reproducible con tres
   escenarios.

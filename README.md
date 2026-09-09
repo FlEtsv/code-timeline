@@ -26,20 +26,47 @@ libro completo vive en la pestaña **Historial**, y las propuestas descartadas
 en la suya. Imprimir saca las tres, esté abierta la que esté: una pestaña es
 un estado de pantalla, no del documento.
 
-## Lo que cuesta: +1% de tokens
+## Lo que cuesta: menos del 2%, y bajando
 
 Una herramienta que se mete entre tú y tu agente tiene que responder a esto
-antes que a nada. Medido sobre **19 sesiones reales de Claude Code** y 7,8
-millones de tokens de trabajo:
+antes que a nada. Y con una medida que puedas rehacer, no con una promesa:
+
+```
+node scripts/medir-coste.mjs
+```
+
+Lee **tus** transcripts de Claude Code, saca el `usage` real de cada sesión y
+mide qué parte se fue en llamadas a Code Timeline. Esto es lo que sale aquí,
+sobre 19 sesiones y 8 millones de tokens de trabajo:
 
 | Si una sesión sin Code Timeline es | 100% |
 |---|---|
-| Con Code Timeline | **100,98%** |
+| Con Code Timeline | **102,04%** |
+| Con la captura de código aplicada a todo | **100,94%** |
 
-**Un 1% de sobrecoste.** Y no es un 1% que pagues a cambio de nada: en la misma
-sesión, redactar el mensaje de commit desde el historial en vez de leyéndose el
-diff ahorró **35.869 → 1.259 tokens** (un 96%). En una sesión de trabajo normal,
-esto se paga solo.
+Las dos filas son reales y miden cosas distintas. La primera es lo que costó de
+verdad, con el agente tecleando el código `before`/`after` a mano. La segunda es
+esa misma medida descontando ese código, que desde la versión actual **ya no se
+teclea**: se captura de `git diff`.
+
+En la sesión en la que se escribió todo esto —14 entradas, la más cargada del
+historial— el sobrecoste medido fue **+1,73%**, con la mitad de las entradas aún
+tecleadas a mano. Y en una tanda normal de 3 entradas sobre una sesión de medio
+millón de tokens, **+0,34%**.
+
+### Y a cambio, ahorra
+
+No es un 1% que pagues por nada. Redactar el mensaje de commit desde el
+historial en vez de leyéndose el diff, medido en el commit de este mismo repo:
+
+| | Tokens de entrada |
+|---|---|
+| Leerse `git diff` + los archivos nuevos | **35.869** |
+| `git_advice`, con el mensaje ya redactado | **1.259** |
+
+Un 96% menos, en una sola operación — treinta veces lo que costó registrar toda
+la tanda. El ahorro escala con el tamaño del diff: con un cambio suelto no
+compensa (ver más abajo), con una sesión de trabajo sí.
 
 ### Cómo se consigue
 
@@ -58,16 +85,19 @@ añade, y encima cuesta menos.** Tres decisiones:
    acabas de escribir, y cualquier herramienta acepta la ruta del repo en lugar
    del id, para que no tengas que llamar a `list_projects` antes.
 
-Lo que queda son ~440 tokens por entrada, de los que **411 son la explicación**:
+Lo que queda son **entre 500 y 700 tokens por entrada** —dos formas
+independientes de medirlo, desde los transcripts y desde los datos guardados,
+dan 683 y 547—, y más del 80% de eso es la explicación:
 el porqué del cambio. Eso no se puede capturar de ningún sitio, porque no está
 en el código — y es lo único que separa esto de un `git log`. **Lo único que
 sigues pagando es exactamente lo que compras.**
 
 ### La medida, reproducible
 
-`node --test test/coste.test.mjs` la rehace en tu máquina. No son estimaciones
-de marketing: son pruebas que **fallan** si alguien encarece la herramienta sin
-darse cuenta.
+Dos medidas distintas, las dos reproducibles: `node scripts/medir-coste.mjs`
+saca el porcentaje sobre tus sesiones reales, y `node --test test/coste.test.mjs`
+mide el coste de una entrada en un repo de laboratorio. La segunda son pruebas
+que **fallan** si alguien encarece la herramienta sin darse cuenta.
 
 ```
 escenario                          REGISTRAR                 COMMITEAR
