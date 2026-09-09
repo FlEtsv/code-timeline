@@ -529,7 +529,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-150 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+151 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e

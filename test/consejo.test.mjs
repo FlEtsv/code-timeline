@@ -487,3 +487,27 @@ test('dos llamadas nunca usan la misma marca', async () => {
     .match(/====DATOS-[0-9a-f-]{36}====/)[0];
   assert.notEqual(uno('a'), uno('b'), 'la marca se sortea en cada llamada');
 });
+
+test('una entrada registrada en el mismo segundo que su commit se sella bien', () => {
+  // git guarda la fecha de un commit con precisión de SEGUNDO; las entradas
+  // llevan milisegundos. Una entrada registrada a las 14:09:57.412 y
+  // commiteada acto seguido quedaba "después" de su propio commit —marcado a
+  // las 14:09:57.000— y se sellaba al SIGUIENTE. Pasó de verdad en este repo.
+  const { dir, g } = repoGit();
+  writeFileSync(join(dir, 'nuevo.js'), 'const nuevo = 1;\nconst otro = 2;\n');
+  g('add', '-A'); g('commit', '-m', 'el suyo');
+  const suyo = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+  const fechaCommit = Number(execFileSync('git', ['log', '-1', '--format=%ct'], { cwd: dir, encoding: 'utf8' }).trim()) * 1000;
+
+  // La entrada se registró unos milisegundos antes del commit, dentro del
+  // mismo segundo: es el caso real.
+  const entradas = [cambio({
+    id: 'e1', date: new Date(fechaCommit + 412).toISOString(),
+    files: [{ file: 'nuevo.js', after: 'const nuevo = 1;\nconst otro = 2;' }],
+  })];
+
+  const sellos = sellosPendientes({ id: 't', name: 'T', repoPath: dir }, entradas, instantanea(dir));
+  assert.equal(sellos.length, 1, 'su propio commit no puede quedarse fuera por milisegundos');
+  assert.equal(sellos[0].commit, suyo);
+  rmSync(dir, { recursive: true, force: true });
+});

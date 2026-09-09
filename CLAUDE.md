@@ -200,7 +200,7 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias, 150 casos). Si tocas
+`npm test` (runner de `node:test`, sin dependencias, 151 casos). Si tocas
 `lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
 `lib/mdtext.mjs`, `lib/git.mjs`, `lib/consejo.mjs`, `lib/captura.mjs`,
 `server.mjs` (el coste en tokens está cubierto por `test/coste.test.mjs`),
