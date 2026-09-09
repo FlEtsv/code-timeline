@@ -177,12 +177,19 @@ archivo ya no existe ahí (renombrado/borrado), cae a
   un archivo, usado por la pantalla completa al cambiar de pestaña).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
-- `bin/cli.mjs` — CLI para el usuario: `serve`, `projects`, `link`,
+- `bin/cli.mjs` — CLI para el usuario: `init`, `serve`, `projects`, `link`,
   `changes`, `proposals`, `decide`, `applied`, `test`, `qa`, `export`,
-  `import`, `render`, `show`, `doctor`. Cuando algo no cuadre en un proyecto
-  vinculado (la web no carga un archivo, los datos parecen otros), `doctor` es
-  el primer sitio donde mirar: dice el directorio en uso y por qué regla, si
-  el `repoPath` de cada proyecto sigue existiendo, y si quedaron restos de una
+  `import`, `render`, `show`, `doctor`. `init` es el arranque en un proyecto
+  nuevo: registra el MCP en scope user, vincula el repo (el de `--path`, o el
+  directorio actual) y deja un bloque delimitado de uso en su `CLAUDE.md`.
+  Idempotente — cada uno de los tres pasos comprueba primero si ya está hecho
+  y lo omite, sin duplicar el MCP ni el proyecto ni tocar el resto del
+  `CLAUDE.md`. Los comandos externos (`claude mcp add`, `claude mcp list`) se
+  lanzan sin shell (`execFileSync` con argumentos en array), igual que el
+  resto de la herramienta. Cuando algo no cuadre en un proyecto vinculado (la
+  web no carga un archivo, los datos parecen otros), `doctor` es el primer
+  sitio donde mirar: dice el directorio en uso y por qué regla, si el
+  `repoPath` de cada proyecto sigue existiendo, y si quedaron restos de una
   escritura a medias.
 
 **Diseño visual** (por si regeneras algo a mano, `lib/render.mjs`): un "libro

@@ -2,7 +2,7 @@
 import {
   listProjects, getProject, createProject, listChanges, listByStatus,
   decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
-  findProjectByRepo, recordQaRun, listQaRuns, stampCommits,
+  findProjectByRepo, recordQaRun, listQaRuns, stampCommits, syncReport,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from '../lib/consejo.mjs';
@@ -12,7 +12,8 @@ import { DATA_DIR, DATA_DIR_REASON } from '../lib/datadir.mjs';
 import { webStatus } from '../lib/webproc.mjs';
 import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const [, , cmd, ...rest] = process.argv;
 
@@ -95,7 +96,150 @@ function restosDelAlmacen(dir) {
   return hallazgos;
 }
 
+// ── init ────────────────────────────────────────────────────
+// Lo que hoy hay que hacer a mano leyendo el README para empezar a usar esto
+// en un proyecto: registrar el MCP, vincular el repo y dejar dicho en su
+// CLAUDE.md cómo usarlo. Los tres pasos son idempotentes: cada uno comprueba
+// primero si ya está hecho antes de tocar nada.
+
+const MCP_NAME = 'code-timeline';
+const CLAUDE_BIN = process.env.CODE_TIMELINE_CLAUDE || 'claude';
+const INIT_START = '<!-- code-timeline:start -->';
+const INIT_END = '<!-- code-timeline:end -->';
+
+function serverMjsPath() {
+  return fileURLToPath(new URL('../server.mjs', import.meta.url));
+}
+
+// Ejecuta el binario de claude sin pasar por un shell. En las pruebas,
+// CODE_TIMELINE_CLAUDE puede apuntar a un script .mjs de mentira: en ese caso
+// se lanza con el mismo node que está corriendo este proceso, en vez de
+// intentar ejecutarlo como si fuera un binario del sistema.
+function ejecutarClaude(args) {
+  const esScript = /\.[cm]?js$/.test(CLAUDE_BIN);
+  return execFileSync(esScript ? process.execPath : CLAUDE_BIN, esScript ? [CLAUDE_BIN, ...args] : args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: 10000,
+  });
+}
+
+// null: no se pudo comprobar (claude no está en el PATH, o el comando falló).
+// Se trata distinto de "no registrado": registrar a ciegas cuando no se sabe
+// el estado real podría duplicar la entrada.
+function mcpYaRegistrado(nombre) {
+  let salida;
+  try {
+    salida = ejecutarClaude(['mcp', 'list']);
+  } catch {
+    return null;
+  }
+  return salida.split('\n').some((linea) => linea.trim().split(/[:\s]/)[0] === nombre);
+}
+
+function registrarMcp(nombre, ruta) {
+  ejecutarClaude(['mcp', 'add', '--scope', 'user', nombre, '--', 'node', ruta]);
+}
+
+function bloqueUsoClaudeMd(proyecto) {
+  return [
+    INIT_START,
+    '## Code Timeline',
+    '',
+    `Repositorio vinculado a Code Timeline como \`${proyecto.id}\`. El MCP ` +
+      '`code-timeline` está en scope user, así que cualquier sesión de Claude Code ' +
+      'aquí ya puede usarlo sin nada más que instalar.',
+    '',
+    'Registra cada cambio de código nada más hacerlo, con `add_change` — el porqué, ' +
+      'mientras esté fresco, no reconstruido al final. Lo que veas mejorable pero no ' +
+      'toque el encargo, con `propose_change`, para decidirlo luego en la web en vez ' +
+      'de perderlo al cerrar el chat. Antes de ponerte a trabajar aquí, revisa ' +
+      '`list_proposals` con `status: "accepted"`: es el único sitio donde consta si ' +
+      'se aceptó algo entre sesiones.',
+    INIT_END,
+  ].join('\n');
+}
+
+// Inserta o reemplaza el bloque delimitado sin tocar el resto del archivo.
+function actualizarClaudeMd(ruta, bloque) {
+  const existente = existsSync(ruta) ? readFileSync(ruta, 'utf8') : '';
+  const patron = new RegExp(`${INIT_START}[\\s\\S]*?${INIT_END}`);
+  const habiaBloque = patron.test(existente);
+
+  const siguiente = habiaBloque ? existente.replace(patron, bloque)
+    : existente.trim() ? `${existente.replace(/\s+$/, '')}\n\n${bloque}\n`
+    : `${bloque}\n`;
+
+  if (siguiente === existente) return 'sin cambios';
+  writeFileSync(ruta, siguiente);
+  return habiaBloque ? 'actualizado' : existente ? 'añadido' : 'creado';
+}
+
 switch (cmd) {
+  case 'init': {
+    const repoPath = resolve(flag('path', rest) || process.cwd());
+    const name = flag('name', rest) || repoPath.split(/[\\/]/).filter(Boolean).pop() || 'proyecto';
+
+    // Comprobar la ruta ANTES de tocar nada: los tres pasos de init mutan
+    // estado (MCP en scope user, proyecto en el store, CLAUDE.md), y si la ruta
+    // no existe se quedaban registrados apuntando a la nada, a medias.
+    if (!existsSync(repoPath)) {
+      console.error(`code-timeline init: la ruta "${repoPath}" no existe.`);
+      process.exit(1);
+    }
+    if (!existsSync(join(repoPath, '.git'))) {
+      // Aviso, no error: code-timeline lee git (sync, sellar, git_advice) pero
+      // vincular en si no lo exige, igual que `code-timeline link`.
+      console.log(`⚠ "${repoPath}" no parece un repositorio git (no hay .git): `
+        + `sync, sellar y el copiloto de git no tendran de donde leer.\n`);
+    }
+
+    console.log(`code-timeline init — ${repoPath}\n`);
+
+    const registrado = mcpYaRegistrado(MCP_NAME);
+    if (registrado === true) {
+      console.log(`✔ MCP "${MCP_NAME}" ya estaba registrado en scope user — omitido`);
+    } else if (registrado === null) {
+      console.log(`✘ No se pudo comprobar si el MCP está registrado (¿"claude" en el PATH?) — omitido. A mano:`);
+      console.log(`  claude mcp add --scope user ${MCP_NAME} -- node "${serverMjsPath()}"`);
+    } else {
+      try {
+        registrarMcp(MCP_NAME, serverMjsPath());
+        console.log(`✔ MCP "${MCP_NAME}" registrado en scope user`);
+      } catch (err) {
+        console.log(`✘ No se pudo registrar el MCP: ${err.message}`);
+      }
+    }
+
+    let proyecto = findProjectByRepo(repoPath);
+    if (proyecto) {
+      console.log(`✔ Proyecto ya vinculado (${proyecto.id}) — omitido`);
+    } else {
+      proyecto = createProject({ name, repoPath });
+      console.log(`✔ Proyecto vinculado: ${proyecto.id}`);
+    }
+
+    const claudeMdPath = join(repoPath, 'CLAUDE.md');
+    const resultado = actualizarClaudeMd(claudeMdPath, bloqueUsoClaudeMd(proyecto));
+    console.log(resultado === 'sin cambios'
+      ? '✔ CLAUDE.md ya tenía el bloque de uso al día — omitido'
+      : `✔ CLAUDE.md: bloque de uso ${resultado}`);
+    break;
+  }
+
+  case 'sync': {
+    try {
+      const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : flag('repo', rest) || process.cwd();
+      const report = syncReport(id);
+      console.log(report.message);
+      for (const gap of report.gaps) console.log(`  ${JSON.stringify(gap.file)}: ${gap.reason}`);
+    } catch (err) {
+      console.error(err.message);
+      process.exitCode = 1;
+    }
+    break;
+  }
+
   case 'projects': {
     printProjects(listProjects());
     break;
@@ -423,6 +567,11 @@ switch (cmd) {
     console.log(`code-timeline — historial visual de cambios de código
 
 Comandos:
+  sync [<projectId>] [--repo ruta]      lista cambios sin registrar (solo lectura)
+  init [--path P] [--name N]            registra el MCP en scope user, vincula el repo
+                                        (el de --path, o el directorio actual) y deja un
+                                        bloque de uso en su CLAUDE.md. Idempotente: cada
+                                        paso que ya estaba hecho se omite y se dice
   serve [--port N] [--host H] [--open]  levanta la web en localhost (viva, con notas)
                                         --host por defecto 127.0.0.1: solo tu máquina.
                                         Otro valor la abre a la red local

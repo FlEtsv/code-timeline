@@ -382,8 +382,20 @@ code-timeline serve --port 4173 --open
 
 ### Conectarlo a Claude Code
 
-Registra el servidor MCP una sola vez, con `--scope user` para tenerlo
-disponible desde cualquier proyecto:
+Con el CLI en el PATH, un solo comando desde el repo que quieras vincular:
+
+```bash
+code-timeline init
+```
+
+Registra el servidor MCP en `--scope user` (una sola vez, vale para cualquier
+proyecto), vincula el directorio actual y deja un bloque de uso en su
+`CLAUDE.md`. Es idempotente: si lo vuelves a ejecutar, cada paso que ya
+estaba hecho se omite y se dice — no duplica el MCP ni el proyecto, y no
+rompe el resto del `CLAUDE.md`. Admite `--path` para vincular otro
+directorio y `--name` para no usar el nombre de la carpeta.
+
+A mano es lo mismo en tres pasos:
 
 ```bash
 claude mcp add --scope user code-timeline -- node "$(pwd)/server.mjs"
@@ -420,7 +432,19 @@ de un diff.
 
 ## El CLI
 
+`code-timeline sync [<projectId>] [--repo ruta]` informa de `N cambios sin registrar`,
+con archivo y motivo, sin escribir entradas. Por defecto usa el repositorio actual.
+Compara los commits de la rama actual desde la fecha de la última entrada aplicada
+(todo el historial si está vacío), el diff local y los archivos sin seguimiento.
+La cobertura se comprueba por archivo y fragmentos antes/después o commit registrado;
+es una comparación de código, no del significado de la explicación. Cada archivo
+con huecos cuenta una vez. La herramienta MCP `sync_report`, con `projectId` (id o
+ruta), devuelve el mismo informe como `{ projectId, since, count, message, gaps }`,
+donde cada hueco tiene `file` y `reason`.
+
 ```
+code-timeline init [--path P] [--name N]  registra el MCP, vincula el repo y deja el
+                                          bloque de uso en su CLAUDE.md. Idempotente
 code-timeline serve [--port N] [--host H] [--open]   levanta la web (viva, con notas)
 code-timeline projects                    lista los proyectos vinculados
 code-timeline link --name N --path P [--remote R]   vincula un proyecto
@@ -462,6 +486,7 @@ code-timeline doctor                      diagnóstico: dónde están los datos 
 | `git_advice` | Qué convendría hacer con git, con el mensaje de commit ya redactado |
 | `stamp_commits` | Apunta en cada entrada el commit que la recogió |
 | `pr_body` | Redacta el cuerpo de un PR desde las entradas de la rama |
+| `sync_report` | Informe de cambios sin registrar (commits, diff local y archivos sin seguimiento). Solo lectura |
 | `start_web` / `stop_web` / `web_status` | Controla el servidor web |
 
 La frontera entre `add_change` y `propose_change` es la que sostiene todo lo
@@ -529,7 +554,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-151 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+157 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e

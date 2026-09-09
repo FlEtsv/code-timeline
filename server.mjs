@@ -8,7 +8,7 @@ import {
   listProjects, getProject, createProject,
   listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied, setTest,
   exportProject, importProject, timelineHtmlPath, stampCommits, resumirCambio, getChange,
-  resolveProject,
+  resolveProject, syncReport,
 } from './lib/store.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from './lib/consejo.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
@@ -16,6 +16,16 @@ import { renderMarkdown } from './lib/markdown.mjs';
 import { startWeb, stopWeb, webStatus } from './lib/webproc.mjs';
 
 const server = new McpServer({ name: 'code-timeline', version: '1.0.0' });
+
+server.registerTool('sync_report', {
+  title: 'Cambios sin registrar',
+  description: 'Compara commits desde la última entrada aplicada y el diff local con el timeline. Solo informa; no escribe entradas.',
+  inputSchema: { projectId: z.string().describe('Id del proyecto o ruta del repo') },
+  annotations: { readOnlyHint: true },
+}, async ({ projectId }) => {
+  const report = syncReport(projectId);
+  return { ...text(report), structuredContent: report };
+});
 
 // Devuelve el id canónico admitiendo también la ruta del repo. La resolución
 // vive en el almacén (getProject); esto solo la normaliza antes de pasarla a

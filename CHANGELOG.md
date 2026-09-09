@@ -10,7 +10,7 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
 
 ### El producto
 
-- Servidor **MCP** (stdio) con 20 herramientas para que un agente registre
+- Servidor **MCP** (stdio) con 21 herramientas para que un agente registre
   cada cambio con su antes/después y su porqué, proponga lo que aún no ha
   escrito, y anote cómo se comprueba que funciona.
 - **Web local** para leer el historial en orden, marcar revisado y dejar
@@ -92,6 +92,18 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   los archivos), si quedan restos de una escritura a medias y cómo
   recuperarse, y si la web está corriendo. Sale con código 1 si encuentra
   algo, para poder llamarlo desde un script.
+- **`code-timeline init`** — un solo comando para empezar a usar esto en un
+  proyecto: registra el servidor MCP en `--scope user` (una sola vez, vale
+  para cualquier proyecto), vincula el directorio actual y deja un bloque de
+  uso delimitado en su `CLAUDE.md`. Idempotente — cada paso que ya estaba
+  hecho se omite y se dice, sin duplicar el MCP ni el proyecto y sin tocar el
+  resto del archivo. Admite `--path` (otro directorio) y `--name`.
+- **`code-timeline sync`** — el trabajo que aún no está en el historial.
+  Compara los commits de la rama desde la fecha de la última entrada aplicada
+  (todo el historial si está vacío), el diff local y los archivos sin
+  seguimiento, y lista un hueco por archivo con su motivo. Solo informa, no
+  escribe entradas. La herramienta MCP `sync_report` devuelve el mismo
+  informe ya estructurado, con `projectId` (id o ruta del repo).
 
 ### Corregido antes del lanzamiento
 
@@ -119,6 +131,15 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
 - `lib/webproc.mjs` respeta `CODE_TIMELINE_DATA` como el resto.
 - El README documentaba mal el CLI: faltaba el comando `qa` entero y varias
   opciones, y decía un número de pruebas que no era el real.
+- **Los tests ya no dependen de un shell de Unix para comprobarse.** La
+  prueba de `consejo` invocaba `/bin/sh` solo para reconstruir el comando
+  que se aconseja; ahora compara el comando entero como texto, y de paso
+  cubre el caso del cuerpo vacío que antes no se ejercitaba. La de `coste`
+  se fija un `CODE_TIMELINE_DATA` temporal por proceso —la variable se
+  resuelve al cargar, no se puede reencaminar entre casos— así que cada caso
+  vacía ese directorio antes de empezar y ninguno se encuentra los proyectos
+  que dejó el anterior. Ambas corren igual en Windows y en Linux, que es
+  donde las pasa la integración continua.
 
 ### Infraestructura
 

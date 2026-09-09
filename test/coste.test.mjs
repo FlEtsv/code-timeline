@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,10 +16,25 @@ import { execFileSync } from 'node:child_process';
 // Un token son ~4 caracteres. Es una aproximación, pero sirve para lo único
 // que importa aquí: el ORDEN DE MAGNITUD y que no se dispare.
 
+// DATA_DIR se resuelve al cargar lib/datadir.mjs y queda fijado para todo el
+// proceso: no se puede reencaminar el almacén entre casos con otra variable de
+// entorno. El aislamiento es, por tanto, un único temporal por proceso (este
+// directorio) que se VACÍA antes de cada caso y se borra al terminar la suite:
+// ningún caso se encuentra los proyectos que dejó el anterior, y cada repo git
+// es un mkdtemp propio que el propio caso elimina al acabar.
 const DATA = mkdtempSync(join(tmpdir(), 'ct-coste-'));
 process.env.CODE_TIMELINE_DATA = DATA;
 const store = await import('../lib/store.mjs');
 const { aconsejar, comandoCommit } = await import('../lib/consejo.mjs');
+
+beforeEach(() => {
+  rmSync(DATA, { recursive: true, force: true });
+  mkdirSync(DATA, { recursive: true });
+});
+
+test.after(() => {
+  rmSync(DATA, { recursive: true, force: true });
+});
 
 const tok = (s) => Math.round(String(s).length / 4);
 
@@ -178,7 +193,12 @@ test('un proyecto se puede nombrar por su ruta, sin listar antes', () => {
   const { dir } = repoConTrabajo();
   const p = store.createProject({ name: 'Coste5', repoPath: dir });
   // Averiguar el id llamando a list_projects costaba cientos de tokens cada vez.
-  assert.equal(store.resolveProject(dir).id, p.id);
+  // En Windows las rutas nativas llevan "\", y la búsqueda por ruta del
+  // almacén solo se dispara si la clave contiene "/" (lib/store.mjs, getProject).
+  // Da igual la barra: la comparación se hace por realpath, así que se pregunta
+  // con "/" para ejercitar lo mismo que promete el título en cualquier plataforma.
+  const ruta = dir.replaceAll('\\', '/');
+  assert.equal(store.resolveProject(ruta).id, p.id);
   assert.equal(store.resolveProject(p.id).id, p.id);
   rmSync(dir, { recursive: true, force: true });
 });
