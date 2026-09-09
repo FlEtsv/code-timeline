@@ -2,9 +2,10 @@
 import {
   listProjects, getProject, createProject, listChanges, listByStatus,
   decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
-  findProjectByRepo, recordQaRun, listQaRuns,
+  findProjectByRepo, recordQaRun, listQaRuns, stampCommits,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
+import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from '../lib/consejo.mjs';
 import { renderMarkdown } from '../lib/markdown.mjs';
 import { startServer } from '../lib/httpserver.mjs';
 import { DATA_DIR, DATA_DIR_REASON } from '../lib/datadir.mjs';
@@ -208,6 +209,69 @@ switch (cmd) {
     break;
   }
 
+  // ── Copiloto de git ───────────────────────────────────────
+  // Los tres comandos leen git y no lo escriben: imprimen lo que convendría
+  // hacer y el comando para hacerlo. Quien commitea es el usuario.
+
+  case 'consejo': {
+    const repo = flag('repo', rest) || process.cwd();
+    const proyecto = rest[0] && !rest[0].startsWith('--') ? getProject(rest[0]) : findProjectByRepo(repo);
+    if (!proyecto) { console.error(`No hay ningún proyecto vinculado para ${repo}.`); process.exit(1); }
+    const r = aconsejar(proyecto, listChanges(proyecto.id));
+    if (!r.git) { console.log(`${proyecto.name}: no es un repositorio git.`); break; }
+
+    const estado = r.git.estado && r.git.estado.limpio
+      ? 'árbol limpio'
+      : `${r.git.estado.modificados.length + r.git.estado.sinSeguimiento.length} archivo(s) sin commitear`;
+    console.log(`${proyecto.name} · ${r.git.rama || 'sin rama'} · ${estado}`);
+    if (r.git.ultimoCommit) console.log(`último commit ${r.git.ultimoCommit.hash} — ${r.git.ultimoCommit.asunto}`);
+    console.log('');
+
+    if (!r.consejos.length) { console.log('Nada que hacer con git ahora mismo.'); break; }
+    for (const c of r.consejos) {
+      console.log(`${c.nivel === 'aviso' ? '!' : '·'} ${c.titulo}`);
+      console.log(`  ${c.detalle}`);
+      for (const cmd of c.comandos || []) console.log(`  $ ${cmd.texto.split('\n')[0]}${cmd.texto.includes('\n') ? ' …' : ''}`);
+      console.log('');
+    }
+    if (r.mensaje) {
+      console.log('Mensaje de commit propuesto:');
+      console.log(comandoCommit(r.mensaje));
+    }
+    break;
+  }
+
+  case 'sellar': {
+    const id = flag('proyecto', rest) || rest[0];
+    const proyecto = id ? getProject(id) : findProjectByRepo(flag('repo', rest) || process.cwd());
+    if (!proyecto) { console.error('Uso: code-timeline sellar --proyecto <projectId> [--simular]'); process.exit(1); }
+    const changes = listChanges(proyecto.id);
+    const sellos = sellosPendientes(proyecto, changes, aconsejar(proyecto, changes).git);
+    if (!sellos.length) { console.log('No hay ninguna entrada que sellar.'); break; }
+    if (rest.includes('--simular')) {
+      for (const s2 of sellos) console.log(`${s2.commit}  ${s2.title}`);
+      console.log(`\n${sellos.length} entrada(s) se sellarían. Sin --simular se escriben.`);
+      break;
+    }
+    const hecho = stampCommits(proyecto.id, sellos);
+    for (const e of hecho.entradas) console.log(`${e.commit}  ${e.title}`);
+    console.log(`\n${hecho.sellados} entrada(s) selladas.`);
+    break;
+  }
+
+  case 'pr': {
+    const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : null;
+    const proyecto = id ? getProject(id) : findProjectByRepo(flag('repo', rest) || process.cwd());
+    if (!proyecto) { console.error('Uso: code-timeline pr [<projectId>] [--out ruta]'); process.exit(1); }
+    const changes = listChanges(proyecto.id);
+    const pr = cuerpoPr(proyecto, changes, aconsejar(proyecto, changes).git);
+    if (!pr) { console.log('No hay entradas registradas en esta rama.'); break; }
+    const out = flag('out', rest);
+    if (out && out !== '-') { writeFileSync(resolve(out), pr.texto); console.log(`Escrito en ${resolve(out)}`); }
+    else console.log(pr.texto);
+    break;
+  }
+
   case 'export': {
     const id = rest[0];
     if (!id) { console.error('Uso: code-timeline export <projectId> [--format json|md] [--out ruta]'); process.exit(1); }
@@ -381,6 +445,12 @@ Comandos:
                                         registra una ejecución de QA de un arnés externo
                                         (--listar para verlas). Silencioso si el repo no
                                         está vinculado: pensado para llamarlo desde otro script
+  consejo [<projectId>] [--repo ruta]   qué convendría hacer con git: commit, rama, pruebas
+                                        en rojo, entradas por sellar, deriva. Con el mensaje
+                                        de commit ya redactado desde el porqué registrado
+  sellar --proyecto <projectId> [--simular]
+                                        apunta en cada entrada el commit que la recogió
+  pr [<projectId>] [--out ruta]         cuerpo de PR desde las entradas de la rama actual
   render <projectId>                    exporta un timeline.html estático (archivo)
   show <projectId>                      metadatos completos del proyecto (JSON)
   doctor                                diagnóstico: dónde están los datos y por qué,

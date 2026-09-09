@@ -7,8 +7,9 @@ import { resolve } from 'node:path';
 import {
   listProjects, getProject, createProject,
   listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied, setTest,
-  exportProject, importProject, timelineHtmlPath,
+  exportProject, importProject, timelineHtmlPath, stampCommits,
 } from './lib/store.mjs';
+import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from './lib/consejo.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
 import { renderMarkdown } from './lib/markdown.mjs';
 import { startWeb, stopWeb, webStatus } from './lib/webproc.mjs';
@@ -313,6 +314,85 @@ server.registerTool(
     },
   },
   async ({ projectId, changeId, status, command, note }) => text(setTest(projectId, changeId, { status, command, note })),
+);
+
+// ── Copiloto de git ─────────────────────────────────────────
+// Estas tres herramientas leen git; ninguna lo escribe. Commitear, ramificar
+// o subir sigue siendo del usuario: aquí solo se le dice qué convendría y se
+// le da el comando escrito.
+
+server.registerTool(
+  'git_advice',
+  {
+    title: 'Qué convendría hacer con git ahora',
+    description:
+      'Cruza el historial con el estado del repo y devuelve qué convendría hacer: si toca un commit —con el mensaje ya ' +
+      'redactado a partir del PORQUÉ que registraste, no del diff—, si la tanda son en realidad varios commits porque ' +
+      'hay un salto de contexto entre las entradas, si conviene abrir una rama, si hay pruebas en rojo a punto de ' +
+      'entrar en el historial de git, o si el código ya no se parece a lo que dice una entrada. ' +
+      'Llámalo al cerrar una tanda de trabajo en un proyecto vinculado, y siempre que el usuario pregunte si commitear ' +
+      'o cómo llamar a un commit o a una rama. ' +
+      'NO ejecuta nada de git: pásale al usuario el consejo y el comando, y ejecútalo solo si te lo pide él.',
+    inputSchema: { projectId: z.string() },
+  },
+  async ({ projectId }) => {
+    const project = getProject(projectId);
+    const r = aconsejar(project, listChanges(projectId));
+    if (!r.git) return text(`"${project.name}" no es un repositorio git, o git no responde en ${project.repoPath}.`);
+    return text({
+      rama: r.git.rama,
+      ramaPrincipal: r.git.ramaPrincipal,
+      arbolLimpio: r.git.estado ? r.git.estado.limpio : null,
+      ultimoCommit: r.git.ultimoCommit,
+      sinEmpujar: r.git.sinEmpujar,
+      entradasSinCommitear: r.pendientes.length,
+      mensajePropuesto: r.mensaje && { ...r.mensaje, comando: comandoCommit(r.mensaje) },
+      consejos: r.consejos,
+    });
+  },
+);
+
+server.registerTool(
+  'stamp_commits',
+  {
+    title: 'Apuntar en cada entrada el commit que la recogió',
+    description:
+      'Busca, para cada entrada sin commit apuntado, el primer commit posterior que toca sus archivos, y lo sella. ' +
+      'Enlaza el historial con git: la vista a pantalla completa puede entonces leer el archivo tal como estaba, y ' +
+      'esas entradas dejan de contar como pendientes de commit. Llámalo después de commitear trabajo que registraste. ' +
+      'Nunca pisa un commit ya apuntado. Con dryRun=true dice qué sellaría sin tocar nada.',
+    inputSchema: {
+      projectId: z.string(),
+      dryRun: z.boolean().optional().describe('true para ver qué se sellaría sin escribirlo'),
+    },
+  },
+  async ({ projectId, dryRun }) => {
+    const project = getProject(projectId);
+    const changes = listChanges(projectId);
+    const sellos = sellosPendientes(project, changes, aconsejar(project, changes).git);
+    if (!sellos.length) return text('No hay ninguna entrada que sellar: o ya tienen commit, o su código todavía no se ha commiteado.');
+    if (dryRun) return text({ sellaria: sellos.length, entradas: sellos });
+    return text(stampCommits(projectId, sellos));
+  },
+);
+
+server.registerTool(
+  'pr_body',
+  {
+    title: 'Redactar el cuerpo de un PR desde el historial',
+    description:
+      'Devuelve en Markdown qué cambia, por qué y cómo se ha probado, a partir de las entradas registradas en la rama ' +
+      'actual (desde que se separó de la principal). Sirve para la descripción de un pull request o para el ' +
+      'comentario de handoff al cerrar la jornada. No publica nada en GitHub: devuelve el texto para que lo pegue el usuario.',
+    inputSchema: { projectId: z.string() },
+  },
+  async ({ projectId }) => {
+    const project = getProject(projectId);
+    const changes = listChanges(projectId);
+    const pr = cuerpoPr(project, changes, aconsejar(project, changes).git);
+    if (!pr) return text('No hay entradas registradas en esta rama para redactar un PR.');
+    return text(pr.texto);
+  },
 );
 
 const transport = new StdioServerTransport();

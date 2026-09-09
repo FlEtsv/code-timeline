@@ -143,3 +143,32 @@ test('proyectos con el mismo nombre no chocan de id', () => {
 test('pedir un proyecto que no existe da un error con salida', () => {
   assert.throws(() => store.getProject('no-existe'), /list_projects/);
 });
+
+// ── Sellado de commits ──────────────────────────────────────
+
+test('sellar rellena el commit de las entradas que no lo tienen', () => {
+  const a = store.addChange(p.id, { title: 'a', explanation: 'e', files: FILES });
+  const b = store.addChange(p.id, { title: 'b', explanation: 'e', files: FILES });
+  const r = store.stampCommits(p.id, [
+    { changeId: a.id, commit: 'abc1234' },
+    { changeId: b.id, commit: 'def5678' },
+  ]);
+  assert.equal(r.sellados, 2);
+  const guardados = store.listChanges(p.id);
+  assert.equal(guardados.find((c) => c.id === a.id).commit, 'abc1234');
+  assert.equal(guardados.find((c) => c.id === b.id).commit, 'def5678');
+});
+
+test('sellar no pisa un commit ya apuntado', () => {
+  // El commit que puso quien escribió el cambio manda sobre el que deduce el
+  // copiloto mirando fechas y archivos.
+  const a = store.addChange(p.id, { title: 'a', explanation: 'e', files: FILES, commit: 'elbueno' });
+  const r = store.stampCommits(p.id, [{ changeId: a.id, commit: 'otro' }]);
+  assert.equal(r.sellados, 0);
+  assert.equal(store.listChanges(p.id)[0].commit, 'elbueno');
+});
+
+test('sellar aguanta ids que ya no existen y listas vacías', () => {
+  assert.equal(store.stampCommits(p.id, []).sellados, 0);
+  assert.equal(store.stampCommits(p.id, [{ changeId: 'fantasma', commit: 'abc' }]).sellados, 0);
+});
