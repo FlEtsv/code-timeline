@@ -63,6 +63,16 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
 - Arreglado: nombrar un proyecto por su **ruta** escribía en una carpeta
   inventada (`data/projects/Users/…`) devolviendo éxito. `projectDir` canoniza
   el id antes de construir la ruta.
+- Corregidos seis fallos que encontró una revisión a fondo del código nuevo. El
+  peor: el emparejamiento entrada→commit daba por bueno el commit **anterior**
+  al cambio real —las líneas de contexto del `after` bastaban para pasar el
+  umbral— y lo marcaba como seguro. Ahora se comprueba que el código encaje
+  mejor en el commit que en su padre. Además: los binarios se pueden registrar,
+  los renombrados conservan su «antes», el tope de tamaño se aplica también a
+  un tramo único, y dos validaciones flojas (`Object.hasOwn` en las acciones, y
+  el NUL del marcador de Markdown).
+- El contenido de una propuesta viaja **vallado** en el prompt de la sesión que
+  la aplica, con marca sorteada por llamada: es dato, no instrucción.
 - **`scripts/medir-coste.mjs`** (`npm run coste`): mide sobre TUS transcripts de
   Claude Code cuánto encarece la herramienta una sesión, leyendo el `usage`
   real. El número del README se rehace con un comando en vez de creérselo.

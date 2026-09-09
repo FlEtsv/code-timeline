@@ -209,3 +209,52 @@ test('sin repo, completarArchivos devuelve lo que le dieron', () => {
   assert.deepEqual(completarArchivos(null, entrada).files, entrada);
   assert.equal(completarArchivos(null, entrada).capturados, 0);
 });
+
+// ── Lo que encontró la revisión ─────────────────────────────
+
+test('un cambio en un binario se registra en vez de ser imposible', () => {
+  const { dir, g } = repo();
+  writeFileSync(join(dir, 'i.png'), Buffer.from([0, 1, 2, 3, 4]));
+  g('add', '-A'); g('commit', '-m', 'x');
+  writeFileSync(join(dir, 'i.png'), Buffer.from([0, 1, 2, 3, 4, 5, 6, 7]));
+
+  // Antes devolvía null, y entonces addChange lo rechazaba: no había forma de
+  // registrar un cambio que solo tocara una imagen.
+  const r = capturar(dir, 'i.png');
+  assert.ok(r, 'un binario tiene que poder registrarse');
+  assert.match(r.after, /binario/);
+  assert.match(r.origen, /binario/);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('el tope de tamaño también recorta un único tramo grande', () => {
+  const { dir, g } = repo();
+  const lineas = Array.from({ length: 600 }, (_, i) => `linea ${i}`);
+  writeFileSync(join(dir, 'a.js'), lineas.join('\n') + '\n');
+  g('add', '-A'); g('commit', '-m', 'x');
+  // Un cambio contiguo: un solo hunk enorme, que es justo lo que el bucle de
+  // recorte no tocaba porque solo actuaba con más de un tramo.
+  writeFileSync(join(dir, 'a.js'), lineas.map((l) => `NUEVA ${l}`).join('\n') + '\n');
+
+  const r = capturar(dir, 'a.js');
+  assert.match(r.origen, /recortado/);
+  assert.ok(r.after.split('\n').length < 400,
+    `capturó ${r.after.split('\n').length} líneas con el tope en 400`);
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('un archivo renombrado conserva su "antes"', () => {
+  const { dir, g } = repo();
+  writeFileSync(join(dir, 'viejo.js'), 'linea a\nlinea b\nlinea c\n');
+  g('add', '-A'); g('commit', '-m', 'x');
+  g('mv', 'viejo.js', 'nuevo.js');
+  writeFileSync(join(dir, 'nuevo.js'), 'linea a\nlinea b\nlinea c\nlinea d\n');
+
+  // Restringir el diff a una ruta apaga la detección de renombrados de git, y
+  // el archivo se capturaba entero como código nuevo.
+  const r = capturar(dir, 'nuevo.js');
+  assert.ok(r.before, 'un renombrado no es código nuevo: tiene "antes"');
+  assert.match(r.before, /linea a/);
+  assert.match(r.after, /linea d/);
+  rmSync(dir, { recursive: true, force: true });
+});
