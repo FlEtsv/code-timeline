@@ -7,7 +7,8 @@ import { resolve } from 'node:path';
 import {
   listProjects, getProject, createProject,
   listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied, setTest,
-  exportProject, importProject, timelineHtmlPath, stampCommits,
+  exportProject, importProject, timelineHtmlPath, stampCommits, resumirCambio, getChange,
+  resolveProject,
 } from './lib/store.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from './lib/consejo.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
@@ -16,18 +17,32 @@ import { startWeb, stopWeb, webStatus } from './lib/webproc.mjs';
 
 const server = new McpServer({ name: 'code-timeline', version: '1.0.0' });
 
+// Devuelve el id canónico admitiendo también la ruta del repo. La resolución
+// vive en el almacén (getProject); esto solo la normaliza antes de pasarla a
+// las funciones que esperan un id de verdad.
+const PROJECT_ID = z.string().describe(
+  'El id del proyecto, o la ruta del repo — con la ruta te ahorras llamar a list_projects para averiguar el id',
+);
+
+function pid(clave) {
+  return resolveProject(clave).id;
+}
+
+// JSON compacto, sin indentar: esto lo lee un modelo, no una persona, y la
+// indentación era un 12% de todo lo que devuelven las herramientas — puros
+// espacios en blanco por los que se paga igual.
 function text(obj) {
-  return { content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj, null, 2) }] };
+  return { content: [{ type: 'text', text: typeof obj === 'string' ? obj : JSON.stringify(obj) }] };
 }
 
 function fileSchema(description) {
   return z.array(z.object({
     file: z.string().describe('Ruta del archivo relativa al repo, ej. "web/client/app.js"'),
-    lineStart: z.number().optional().describe('Línea donde empieza el cambio en el estado actual del archivo'),
+    lineStart: z.number().optional().describe('Línea donde empieza el cambio. Opcional: acota la captura cuando en el mismo archivo hay varios cambios sueltos y solo uno es de esta entrada'),
     lineEnd: z.number().optional().describe('Línea donde termina (si es una sola línea, igual a lineStart)'),
-    language: z.string().optional().describe('Lenguaje para el bloque de código, ej. javascript, sql, python'),
-    before: z.string().nullable().optional().describe('Código anterior en ESTE archivo. null u omitido si es código nuevo que no existía'),
-    after: z.string().describe('Código resultante en ESTE archivo tras el cambio'),
+    language: z.string().optional().describe('Lenguaje del bloque de código. Opcional: por defecto se deduce de la extensión'),
+    before: z.string().nullable().optional().describe('NO LO ESCRIBAS salvo que el código no esté en git. Se captura solo'),
+    after: z.string().optional().describe('NO LO ESCRIBAS salvo que el código no esté en git (lo editaste fuera del repo, o quieres enseñar un fragmento distinto del diff). Se captura solo de git diff'),
   })).min(1).describe(description);
 }
 
@@ -38,7 +53,18 @@ server.registerTool(
     description: 'Lista todos los proyectos registrados en Code Timeline, con su id, ruta y número de cambios registrados.',
     inputSchema: {},
   },
-  async () => text(listProjects()),
+  // Solo lo que sirve para elegir un proyecto y saber si tiene algo pendiente.
+  // Devolver los ocho contadores costaba 530 tokens por llamada para que casi
+  // siempre se leyera una línea.
+  async () => text(listProjects().map((p) => ({
+    id: p.id,
+    name: p.name,
+    repoPath: p.repoPath,
+    cambios: p.changeCount,
+    ...(p.proposalCount ? { propuestasPendientes: p.proposalCount } : {}),
+    ...(p.acceptedCount ? { aceptadasSinAplicar: p.acceptedCount } : {}),
+    ...(p.failingCount ? { pruebasEnRojo: p.failingCount } : {}),
+  }))),
 );
 
 server.registerTool(
@@ -62,7 +88,7 @@ server.registerTool(
     description: 'Devuelve los metadatos completos de un proyecto vinculado.',
     inputSchema: { projectId: z.string() },
   },
-  async ({ projectId }) => text(getProject(projectId)),
+  async ({ projectId }) => text(getProject(pid(projectId))),
 );
 
 server.registerTool(
@@ -74,12 +100,13 @@ server.registerTool(
       'Se registra TODO cambio de código, sin filtrar por importancia: un renombrado, un texto de UI o un ajuste de formato ' +
       'llevan entrada igual que un refactor — no decides tú qué merece constar, y si el motivo es que lo pidió el usuario, eso es lo que va en explanation. ' +
       'Añade una entrada al timeline de un proyecto: qué método/clase/atributo cambió, en qué archivo(s) — puede tocar más de uno —, ' +
-      'el código antes y después de cada archivo, y por qué. Deja el código lo más completo posible, sin truncar con "...": ' +
-      'el mini-editor de la web ya deja ver el archivo entero, pero el antes/después es lo primero que se lee y debe bastar por sí solo. ' +
+      'y por qué. NO ESCRIBAS el código: basta con la ruta de cada archivo — el antes/después se captura solo de git diff, ' +
+      'que es exacto y no te cuesta tokens. Escribe "after" a mano solo si el código no está en git (lo editaste fuera del repo) ' +
+      'o si quieres enseñar un fragmento distinto del que saldría del diff. ' +
       'Si el cambio continúa directamente al anterior, deja relationType sin especificar (por defecto "continuation"). ' +
       'Si NO tiene relación con el cambio anterior (otro commit, otro problema, otro momento), pon relationType="jump" y explica el salto en relationNote.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       files: fileSchema('Uno por cada archivo que toca el cambio, en el orden que tenga sentido leerlos'),
       unitType: z.string().optional().describe('Tipo de unidad: función, método, clase, atributo, llamada, config...'),
       unitName: z.string().optional().describe('Nombre de la unidad, ej. "totalCentimos()"'),
@@ -96,17 +123,50 @@ server.registerTool(
       }).optional().describe('Cómo se comprueba el cambio, si ya lo sabes. Si no, regístralo luego con set_test'),
     },
   },
-  async (args) => text(addChange(args.projectId, args)),
+  // Se confirma lo justo, no la entrada entera: devolverla completa costaba
+  // ~1.664 tokens de entrada por llamada —más de lo que cuesta escribirla— y
+  // era repetirle a quien acaba de escribirla lo que ya sabe. Lo único que no
+  // sabía es el id, y de dónde se capturó el código.
+  async (args) => {
+    const c = addChange(pid(args.projectId), args);
+    return text({
+      id: c.id,
+      status: c.status,
+      relation: c.relation.type,
+      archivos: c.files.map((f) => ({
+        file: f.file,
+        lineas: f.lineStart ? `${f.lineStart}-${f.lineEnd}` : null,
+        codigo: f.capturado ? `capturado de git (${f.capturado})` : 'escrito a mano',
+      })),
+    });
+  },
 );
 
 server.registerTool(
   'list_changes',
   {
     title: 'Listar cambios registrados',
-    description: 'Devuelve las entradas del historial de un proyecto, en orden cronológico.',
-    inputSchema: { projectId: z.string(), limit: z.number().optional() },
+    description:
+      'Devuelve las entradas del historial de un proyecto, en orden cronológico, SIN el código: título, porqué ' +
+      'recortado, archivos, unidad, estado y prueba. Es lo que hace falta para orientarse, y cuesta un 10% de lo ' +
+      'que costaría con el código dentro. Cuando necesites una entrada entera —su antes/después completo—, pídela ' +
+      'con get_change en vez de traértelas todas.',
+    inputSchema: { projectId: PROJECT_ID, limit: z.number().optional() },
   },
-  async ({ projectId, limit }) => text(listChanges(projectId, limit)),
+  async ({ projectId, limit }) => text(listChanges(pid(projectId), limit).map(resumirCambio)),
+);
+
+server.registerTool(
+  'get_change',
+  {
+    title: 'Una entrada del historial, entera',
+    description:
+      'Devuelve UNA entrada completa, con el código antes/después de cada archivo. Úsalo cuando list_changes te ' +
+      'haya dicho cuál te interesa: traerte el historial entero con el código dentro cuesta diez veces más y casi ' +
+      'nunca hace falta.',
+    inputSchema: { projectId: PROJECT_ID, changeId: z.string() },
+  },
+  async ({ projectId, changeId }) => text(getChange(pid(projectId), changeId)),
 );
 
 server.registerTool(
@@ -174,7 +234,7 @@ server.registerTool(
       'El "después" es el código que PROPONES, no el que existe: la vista a pantalla completa avisa de ello. ' +
       'Si el cambio ya está hecho, la herramienta correcta es add_change.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       files: fileSchema('Los archivos que tocaría la propuesta, con el código actual en "before" y el propuesto en "after"'),
       unitType: z.string().optional().describe('Tipo de unidad: función, método, clase, atributo, config...'),
       unitName: z.string().optional().describe('Nombre de la unidad, ej. "totalCentimos()"'),
@@ -183,7 +243,10 @@ server.registerTool(
       date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
     },
   },
-  async (args) => text(addProposal(args.projectId, args)),
+  async (args) => {
+    const c = addProposal(pid(args.projectId), args);
+    return text({ id: c.id, status: c.status, archivos: c.files.map((f) => f.file) });
+  },
 );
 
 server.registerTool(
@@ -198,11 +261,15 @@ server.registerTool(
       'al terminar de aplicarla, llama a mark_applied. ' +
       '"rejected": descartadas, con el motivo — consúltalo antes de proponer, para no repetir algo ya rechazado.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       status: z.enum(['proposal', 'accepted', 'rejected']).optional().describe('"proposal" (por defecto), "accepted" (aceptadas sin aplicar) o "rejected"'),
     },
   },
-  async ({ projectId, status }) => text(listByStatus(projectId, status || 'proposal')),
+  // Una propuesta se decide leyendo su porqué, así que aquí el recorte es más
+  // largo que en list_changes. El código propuesto sigue estando en get_change.
+  async ({ projectId, status }) => text(
+    listByStatus(pid(projectId), status || 'proposal').map((c) => resumirCambio(c, { explicacion: 900 })),
+  ),
 );
 
 server.registerTool(
@@ -216,7 +283,7 @@ server.registerTool(
       'La decisión es del usuario: usa esto solo cuando te lo pida explícitamente ("acepta la propuesta del carrito"), ' +
       'nunca por tu cuenta ni para dar por buena una propuesta tuya.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       changeId: z.string().describe('id de la propuesta, de list_proposals'),
       decision: z.enum(['accept', 'reject']),
       note: z.string().optional().describe('Motivo. Muy recomendable al descartar: es lo que evita volver a proponerlo'),
@@ -234,7 +301,7 @@ server.registerTool(
       'Formato "json" para respaldar o mover el proyecto a otra máquina (lo lee import_project); ' +
       '"md" para leerlo o compartirlo como texto. Como data/ no se versiona, esto es la vía de respaldo.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       format: z.enum(['json', 'md']).optional().describe('Por defecto "json"'),
       outPath: z.string().optional().describe('Ruta absoluta del fichero a escribir. Por defecto, dentro de data/projects/<id>/'),
     },
@@ -284,14 +351,14 @@ server.registerTool(
       'es lo aplicado, no lo sugerido. La entrada se recoloca con la fecha de hoy y vuelve a "pendiente de revisar", ' +
       'para que el usuario la verifique como cualquier otro cambio.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       changeId: z.string().describe('id de la propuesta aceptada, de list_proposals con status="accepted"'),
       files: fileSchema('El código REAL que escribiste. Omítelo solo si aplicaste la propuesta tal cual, sin un carácter de diferencia').optional(),
       commit: z.string().optional().describe('Hash corto del commit, si ya lo hiciste'),
       note: z.string().optional().describe('Qué cambió respecto a lo propuesto, si hubo que desviarse'),
     },
   },
-  async ({ projectId, changeId, files, commit, note }) => text(markApplied(projectId, changeId, { files, commit, note })),
+  async ({ projectId, changeId, files, commit, note }) => text(markApplied(pid(projectId), changeId, { files, commit, note })),
 );
 
 server.registerTool(
@@ -305,7 +372,7 @@ server.registerTool(
       'status="failing" — un historial donde solo consta lo que funciona miente por omisión. ' +
       'status="auto" exige el comando que la ejecuta: sin él la prueba no se puede repetir.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       changeId: z.string(),
       status: z.enum(['untested', 'auto', 'manual', 'failing']).optional()
         .describe('"auto" (hay test y pasa), "manual" (comprobado a mano), "failing" (probado y falla), "untested"'),
@@ -313,8 +380,9 @@ server.registerTool(
       note: z.string().optional().describe('Qué cubre la prueba, o cómo se comprobó a mano y con qué datos'),
     },
   },
-  async ({ projectId, changeId, status, command, note }) => text(setTest(projectId, changeId, { status, command, note })),
+  async ({ projectId, changeId, status, command, note }) => text(setTest(pid(projectId), changeId, { status, command, note })),
 );
+
 
 // ── Copiloto de git ─────────────────────────────────────────
 // Estas tres herramientas leen git; ninguna lo escribe. Commitear, ramificar
@@ -336,8 +404,8 @@ server.registerTool(
     inputSchema: { projectId: z.string() },
   },
   async ({ projectId }) => {
-    const project = getProject(projectId);
-    const r = aconsejar(project, listChanges(projectId));
+    const project = getProject(pid(projectId));
+    const r = aconsejar(project, listChanges(project.id));
     if (!r.git) return text(`"${project.name}" no es un repositorio git, o git no responde en ${project.repoPath}.`);
     return text({
       rama: r.git.rama,
@@ -362,17 +430,17 @@ server.registerTool(
       'esas entradas dejan de contar como pendientes de commit. Llámalo después de commitear trabajo que registraste. ' +
       'Nunca pisa un commit ya apuntado. Con dryRun=true dice qué sellaría sin tocar nada.',
     inputSchema: {
-      projectId: z.string(),
+      projectId: PROJECT_ID,
       dryRun: z.boolean().optional().describe('true para ver qué se sellaría sin escribirlo'),
     },
   },
   async ({ projectId, dryRun }) => {
-    const project = getProject(projectId);
-    const changes = listChanges(projectId);
+    const project = getProject(pid(projectId));
+    const changes = listChanges(project.id);
     const sellos = sellosPendientes(project, changes, aconsejar(project, changes).git);
     if (!sellos.length) return text('No hay ninguna entrada que sellar: o ya tienen commit, o su código todavía no se ha commiteado.');
     if (dryRun) return text({ sellaria: sellos.length, entradas: sellos });
-    return text(stampCommits(projectId, sellos));
+    return text(stampCommits(project.id, sellos));
   },
 );
 
@@ -387,8 +455,8 @@ server.registerTool(
     inputSchema: { projectId: z.string() },
   },
   async ({ projectId }) => {
-    const project = getProject(projectId);
-    const changes = listChanges(projectId);
+    const project = getProject(pid(projectId));
+    const changes = listChanges(project.id);
     const pr = cuerpoPr(project, changes, aconsejar(project, changes).git);
     if (!pr) return text('No hay entradas registradas en esta rama para redactar un PR.');
     return text(pr.texto);

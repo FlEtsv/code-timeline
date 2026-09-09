@@ -32,9 +32,19 @@ test('title y explanation son obligatorios', () => {
   assert.throws(() => store.addChange(p.id, { title: 't', explanation: '', files: FILES }), /obligatorios/);
 });
 
-test('cada archivo necesita ruta y código resultante', () => {
+test('hace falta al menos un archivo', () => {
   assert.throws(() => store.addChange(p.id, { title: 't', explanation: 'e', files: [] }), /al menos un elemento/);
-  assert.throws(() => store.addChange(p.id, { title: 't', explanation: 'e', files: [{ file: 'a.js' }] }), /al menos un elemento/);
+});
+
+test('un archivo sin código se captura; si no se puede, se dice', () => {
+  // El repoPath de este proyecto de prueba no existe, así que no hay nada que
+  // capturar y el error tiene que explicar qué mirar — no dejar pasar una
+  // entrada con el "después" vacío, que en la web se vería como un panel en
+  // blanco sin decir por qué.
+  assert.throws(
+    () => store.addChange(p.id, { title: 't', explanation: 'e', files: [{ file: 'a.js' }] }),
+    /No se pudo capturar el código de: a\.js/,
+  );
 });
 
 test('un salto sin explicación se rechaza', () => {
@@ -140,8 +150,18 @@ test('proyectos con el mismo nombre no chocan de id', () => {
   assert.notEqual(otro.id, p.id);
 });
 
-test('pedir un proyecto que no existe da un error con salida', () => {
-  assert.throws(() => store.getProject('no-existe'), /list_projects/);
+test('pedir un proyecto que no existe dice cuáles hay', () => {
+  // El error trae la lista: así no hace falta gastar una llamada a
+  // list_projects solo para descubrir que el id estaba mal escrito.
+  assert.throws(() => store.getProject('no-existe'), /No existe el proyecto/);
+  assert.throws(() => store.getProject('no-existe'), new RegExp(p.id));
+});
+
+test('un proyecto se puede pedir por la ruta de su repo', () => {
+  assert.equal(store.getProject('/tmp/repo').id, p.id);
+  // Una cadena que no parece ruta se trata como id aunque no exista: el error
+  // de id es más útil que uno sobre un directorio que nadie mencionó.
+  assert.throws(() => store.getProject('idmalescrito'), /No existe el proyecto "idmalescrito"/);
 });
 
 // ── Sellado de commits ──────────────────────────────────────

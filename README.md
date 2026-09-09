@@ -26,6 +26,63 @@ libro completo vive en la pestaña **Historial**, y las propuestas descartadas
 en la suya. Imprimir saca las tres, esté abierta la que esté: una pestaña es
 un estado de pantalla, no del documento.
 
+## Lo que cuesta: +1% de tokens
+
+Una herramienta que se mete entre tú y tu agente tiene que responder a esto
+antes que a nada. Medido sobre **19 sesiones reales de Claude Code** y 7,8
+millones de tokens de trabajo:
+
+| Si una sesión sin Code Timeline es | 100% |
+|---|---|
+| Con Code Timeline | **100,98%** |
+
+**Un 1% de sobrecoste.** Y no es un 1% que pagues a cambio de nada: en la misma
+sesión, redactar el mensaje de commit desde el historial en vez de leyéndose el
+diff ahorró **35.869 → 1.259 tokens** (un 96%). En una sesión de trabajo normal,
+esto se paga solo.
+
+### Cómo se consigue
+
+**No te quitamos funcionalidad para que salga barato. Al revés: cada versión
+añade, y encima cuesta menos.** Tres decisiones:
+
+1. **El código no lo escribe el agente.** El `before`/`after` era el 59% de todo
+   lo que se tecleaba por MCP — código que ya estaba en el disco y en git. Ahora
+   `add_change` solo necesita la ruta del archivo y el fragmento se captura de
+   `git diff` (`lib/captura.mjs`): exacto, acotado y gratis.
+2. **Leer el historial no arrastra el código.** `list_changes` devuelve título,
+   porqué, archivos y estado; `get_change` trae una entrada entera cuando la
+   necesitas.
+3. **Nada de relleno.** Las respuestas van en JSON compacto (la indentación era
+   un 12% de puros espacios), `add_change` confirma en vez de repetirte lo que
+   acabas de escribir, y cualquier herramienta acepta la ruta del repo en lugar
+   del id, para que no tengas que llamar a `list_projects` antes.
+
+Lo que queda son ~440 tokens por entrada, de los que **411 son la explicación**:
+el porqué del cambio. Eso no se puede capturar de ningún sitio, porque no está
+en el código — y es lo único que separa esto de un `git log`. **Lo único que
+sigues pagando es exactamente lo que compras.**
+
+### La medida, reproducible
+
+`node --test test/coste.test.mjs` la rehace en tu máquina. No son estimaciones
+de marketing: son pruebas que **fallan** si alguien encarece la herramienta sin
+darse cuenta.
+
+```
+escenario                          REGISTRAR                 COMMITEAR
+                        antes   ahora  ahorro      diff historial ahorro
+────────────────────────────────────────────────────────────
+Un cambio suelto (1)      785     443     44%       258       425   +65%
+Una tanda normal (3)     2355    1329     44%       775       449    42%
+Una sesión larga (8)     6280    3544     44%      2066       495    76%
+```
+
+Y lo que no vas a leer en el README de nadie: **con un cambio suelto, redactar
+el commit desde el historial sale más caro que leerse el diff** (+65%). El
+ahorro llega cuando el diff crece, que es justo cuando escribir el commit a mano
+duele. Registrar, en cambio, ahorra un 44% siempre.
+
 ## Por qué, si ya existe `git log`
 
 No lo sustituye, lo complementa. Un commit agrupa varios cambios de una
@@ -134,6 +191,72 @@ del repo — el directorio actual, o el que le digas con `--repo`, sin que haga
 falta saber el `projectId` — y, **si el repo no está vinculado, no hace nada y
 sale con 0**. Así quien lo invoque no depende de que
 Code Timeline esté instalado ni se le rompe el ciclo si falta.
+
+### El copiloto de git
+
+Code Timeline sabe algo que `git` no sabe: el **porqué** de cada cambio,
+escrito cuando estaba fresco. Con eso puede aconsejar sobre git de una forma
+que un diff no permite.
+
+En la cabecera de cada proyecto aparece un panel con la rama, el estado del
+árbol y lo que convendría hacer:
+
+- **Conviene un commit** — con el mensaje **redactado desde las entradas**, no
+  adivinado del diff: el asunto sale del título y el cuerpo del motivo que
+  registraste. Botón para copiar el `git commit` entero.
+- **Esto son N commits, no uno** — cuando entre las entradas sin commitear hay
+  un `jump`, que es literalmente un cambio de contexto declarado por quien lo
+  escribió. Ofrece abrir una rama para lo nuevo.
+- **N entradas sin commitear sobre `main`** — una tanda larga en la rama
+  principal es difícil de revisar y de deshacer.
+- **Pruebas en rojo a punto de entrar en git**, commits **sin subir**, y
+  entradas **ya commiteadas sin su commit apuntado** (que se arreglan con
+  `stamp_commits` o `code-timeline sellar`).
+- **Deriva**: entradas cuyo código ya no se reconoce en el archivo — se
+  revirtió o se reescribió sin registrarlo. Un historial donde solo consta lo
+  que sigue vivo miente por omisión.
+
+Todo son **consejos con el comando escrito para copiar**. Nada de esto ejecuta
+git: ni commit, ni checkout, ni push. El repo lo mueve quien lo entiende.
+
+El mismo copiloto habla por tres bocas más: la herramienta MCP `git_advice`
+—para que Claude te lo diga mientras trabajáis—, el hook `Stop` que avisa una
+vez por sesión, y `code-timeline consejo` en la terminal.
+
+### Los botones que hacen cosas
+
+La web dejó de ser solo de lectura. Tres acciones, y todas parten de un clic
+tuyo:
+
+- **Que la aplique Claude** en una propuesta aceptada. Hasta ahora esa tarjeta
+  te daba una orden para copiar al terminal porque "esta página no puede avisar
+  a Claude"; ahora lanza `claude -p` en el repo con el contexto de la propuesta
+  ya compuesto. Cuando termina, la entrada pasa sola al historial.
+- **Hacerlo** junto al consejo de commit, que ejecuta el `git commit` con el
+  mensaje redactado desde tu historial. Este no pasa por Claude: el mensaje ya
+  está escrito y ejecutarlo son dos órdenes de git.
+- **Subir**, para los commits que se quedaron en tu máquina.
+
+Lo que le llega a Claude desde la web es **solo una propuesta que tú has
+aceptado**. No hay campo de texto libre, y es deliberado: el prompt lo compone
+la herramienta a partir de algo ya escrito y revisado.
+
+Como ese puerto puede ahora tocar tu máquina, las rutas que escriben piden un
+**token** que el servidor genera al arrancar y que viaja dentro de la página,
+más una comprobación de `Origin`. Una web cualquiera que visites puede hacer
+que tu navegador dispare una petición contra tu localhost, pero no puede leer
+la página para sacar el token.
+
+### El cuerpo de un PR
+
+`pr_body`, el enlace **Cuerpo de PR** de la web o `code-timeline pr` redactan
+en Markdown **qué cambia, por qué y cómo se ha probado** con las entradas de
+la rama actual, y avisan de lo que no debería fusionarse a ciegas —pruebas en
+rojo, cambios sin revisar—. Sirve igual para la descripción de un pull request
+que para el comentario de handoff al cerrar la jornada.
+
+Tampoco publica nada: devuelve el texto. Esta herramienta no habla con la API
+de GitHub ni guarda credenciales.
 
 ### Exportar
 
@@ -278,6 +401,9 @@ code-timeline qa --resultado verde|rojo [--comando "..."] [--entorno E] [--detal
 code-timeline qa --listar [--limit N]     ejecuciones de QA de un arnés externo
 code-timeline export <projectId> [--format json|md] [--out ruta|-]
 code-timeline import <fichero.json> [--merge <projectId>] [--repo <ruta>]
+code-timeline consejo [<projectId>] [--repo ruta]    qué convendría hacer con git ahora
+code-timeline sellar --proyecto <id> [--simular]    apunta en cada entrada su commit
+code-timeline pr [<projectId>] [--out ruta]         cuerpo de PR desde las entradas de la rama
 code-timeline render <projectId>          exporta un timeline.html estático
 code-timeline show <projectId>            metadatos del proyecto (JSON)
 code-timeline doctor                      diagnóstico: dónde están los datos y por qué
@@ -292,14 +418,18 @@ code-timeline doctor                      diagnóstico: dónde están los datos 
 | `get_project` | Metadatos de uno |
 | `add_change` | Registra un cambio **ya aplicado**: archivos, antes/después, unidad y porqué |
 | `propose_change` | Registra una **propuesta**: código que aún no ha tocado |
-| `list_changes` | El historial, en orden cronológico |
+| `list_changes` | El historial en orden, **sin el código**: un 10% del coste |
 | `list_proposals` | Las pendientes, o las descartadas con su motivo |
 | `decide_proposal` | Acepta o descarta (solo si se lo pides tú) |
 | `set_test` | Registra cómo se comprueba un cambio, o que su prueba falla |
 | `mark_applied` | Confirma que una aceptada ya está escrita: pasa al historial |
 | `export_project` | Escribe el historial a JSON o Markdown |
 | `import_project` | Lee un JSON exportado: proyecto nuevo o fusión |
+| `get_change` | Una entrada entera, con su código. Para leer una sin traerse todas |
 | `render_timeline` | Exporta el `timeline.html` estático |
+| `git_advice` | Qué convendría hacer con git, con el mensaje de commit ya redactado |
+| `stamp_commits` | Apunta en cada entrada el commit que la recogió |
+| `pr_body` | Redacta el cuerpo de un PR desde las entradas de la rama |
 | `start_web` / `stop_web` / `web_status` | Controla el servidor web |
 
 La frontera entre `add_change` y `propose_change` es la que sostiene todo lo
@@ -367,7 +497,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-74 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+137 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e

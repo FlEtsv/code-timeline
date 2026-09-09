@@ -10,7 +10,7 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
 
 ### El producto
 
-- Servidor **MCP** (stdio) con 16 herramientas para que un agente registre
+- Servidor **MCP** (stdio) con 20 herramientas para que un agente registre
   cada cambio con su antes/después y su porqué, proponga lo que aún no ha
   escrito, y anote cómo se comprueba que funciona.
 - **Web local** para leer el historial en orden, marcar revisado y dejar
@@ -18,6 +18,43 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   disco, árbol de archivos del proyecto y navegación anterior/siguiente).
 - **CLI** para consultar, decidir, exportar (JSON y Markdown), importar y
   levantar la web.
+- **Copiloto de git**: cruza el historial con el estado del repo y dice qué
+  convendría hacer — commit (con el mensaje redactado desde el porqué
+  registrado, no del diff), separar la tanda en varios commits cuando hay un
+  salto de contexto entre entradas, abrir una rama, pruebas en rojo a punto de
+  entrar en git, commits sin subir, entradas por sellar y deriva entre el
+  historial y el código. Aconseja y da el comando; no ejecuta git. Se asoma
+  por cuatro sitios: el panel de la web, la herramienta MCP `git_advice`, el
+  hook `Stop` y `code-timeline consejo`.
+- **Cuerpo de PR** desde las entradas de la rama (`pr_body`, `code-timeline
+  pr`, enlace en la web): qué cambia, por qué y cómo se ha probado.
+- **Sellado de commits** (`stamp_commits`, `code-timeline sellar`): apunta en
+  cada entrada el commit que la recogió, enlazando el historial con git.
+- Los textos de una entrada —explicación, notas, motivo de un salto o de un
+  descarte— se **leen como Markdown** en la web, que es como venían escritos.
+- **El código ya no lo escribe el agente**: `add_change` solo necesita la ruta
+  del archivo y captura el antes/después de `git diff` (`lib/captura.mjs`).
+  Medido sobre 129 entradas reales, el código era el 59% de lo que un agente
+  tecleaba por MCP. Escribir una entrada baja de ~1.363 a ~409 tokens.
+- **`list_changes` devuelve el historial sin código** y aparece `get_change`
+  para leer una entrada entera. Mirar el historial de un proyecto grande baja
+  de ~37.000 a ~2.100 tokens de contexto.
+- **La web ejecuta, no solo aconseja**: botón para que Claude aplique una
+  propuesta aceptada, para commitear con el mensaje redactado desde el
+  historial, y para subir. Siempre desde un clic; nada se dispara solo. Lo
+  único que se le manda a Claude es una propuesta aceptada — no hay texto
+  libre.
+- Las rutas que escriben piden un **token** de sesión y comprueban el `Origin`.
+- Más recortes de coste, sin quitar nada: las respuestas van en **JSON
+  compacto** (la indentación era un 12% de espacios), `add_change` **confirma
+  en vez de repetir** la entrada entera (eran ~1.664 tokens de entrada por
+  llamada), `list_projects` devuelve solo lo que sirve para elegir, el
+  **lenguaje se deduce de la extensión**, y cualquier herramienta acepta la
+  **ruta del repo** en lugar del id — `list_projects` se llamaba 17 veces solo
+  para averiguarlo.
+- **`test/coste.test.mjs`**: pruebas que miden el coste en tokens y fallan si
+  alguien encarece la herramienta. Incluye un informe reproducible con tres
+  escenarios.
 - Export a **PDF** desde el navegador, con hoja de estilo propia para papel.
 - Registro de ejecuciones de **QA de un arnés externo**, aparte del historial.
 - **74 pruebas** con el runner de Node, sin dependencias.

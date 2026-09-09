@@ -20,6 +20,10 @@ una vez, aquí cada entrada es una unidad revisable de una sentada.
 El MCP `code-timeline` está instalado en **scope user** — disponible siempre,
 en cualquier proyecto, sin tener que abrir este repo. Herramientas:
 
+- **El `projectId` de cualquier herramienta admite también la RUTA del repo.**
+  Pásale el directorio en el que estás y te ahorras la llamada a
+  `list_projects` solo para averiguar el id. Si el id no existe, el error ya
+  trae la lista de los que hay.
 - `link_project(name, repoPath)` — una vez por proyecto nuevo. Devuelve el
   `projectId` (slug). Antes de vincular, comprueba con `list_projects` si ya
   existe uno para ese repo.
@@ -29,13 +33,30 @@ en cualquier proyecto, sin tener que abrir este repo. Herramientas:
   `before` (null si es código nuevo), `after`), `unitType`/`unitName`, `title`,
   `explanation` (el PORQUÉ, no una paráfrasis del diff), y `relationType`
   (`continuation` por defecto; `jump` + `relationNote` si no tiene que ver con
-  el cambio anterior). **Deja el código de `before`/`after` completo, sin
-  truncar con `// ...`** — es lo primero que se lee y tiene que bastar por sí
-  solo; la vista de pantalla completa (abajo) es para ver el archivo entero
-  alrededor, no un sustituto de un diff bien escrito.
+  el cambio anterior). **NO escribas el código**: basta con `{ file: "ruta" }`
+  y el antes/después se captura solo de `git diff` (`lib/captura.mjs`), que es
+  exacto y no cuesta tokens. Escribe `after` a mano solo si el código no está
+  en git —lo editaste fuera del repo— o si quieres enseñar un fragmento
+  distinto del que saldría del diff. `lineStart`/`lineEnd` son opcionales y
+  sirven para acotar cuando en el mismo archivo hay varios cambios sueltos y
+  solo uno es de esta entrada.
 - `render_timeline(projectId)` — regenera el HTML estático (para exportar o
   como respaldo legible en git). La vista viva es el servidor, no esto.
-- `list_changes` / `get_project` — consulta.
+- `list_changes` — el historial SIN código: título, porqué recortado, archivos,
+  estado. Cuesta un 10% de lo que costaba. `get_change(projectId, changeId)`
+  trae UNA entrada entera con su antes/después; no te traigas el historial
+  completo con el código dentro para leer una.
+- `get_project` — consulta.
+- `git_advice(projectId)` — **al cerrar una tanda de trabajo**, y siempre que
+  el usuario pregunte si commitear o cómo llamar a un commit o a una rama.
+  Devuelve qué convendría hacer con el mensaje de commit ya redactado a partir
+  del porqué que registraste. Dile al usuario el consejo y dale el comando;
+  no ejecutes git salvo que te lo pida él.
+- `stamp_commits(projectId)` — después de commitear trabajo registrado: apunta
+  en cada entrada el commit que la recogió.
+- `pr_body(projectId)` — para la descripción de un PR o el comentario de
+  handoff: qué cambia, por qué y cómo se ha probado, desde las entradas de la
+  rama.
 
 **Cuándo registrar**: siempre que edites código en un proyecto vinculado,
 sea grande o mínimo. Llama a `add_change` justo después del cambio, mientras
@@ -119,6 +140,29 @@ archivo ya no existe ahí (renombrado/borrado), cae a
   (projects)`, y `renderFileTable(content, lineStart, lineEnd)` (la tabla
   con números de línea, compartida por la pantalla completa y el endpoint
   de archivo).
+- `lib/mdtext.mjs` — `mdToHtml(texto)`: Markdown acotado para los textos de una
+  entrada (explicación, notas, motivo de un salto o de un descarte). Escapa
+  todo primero y solo después reintroduce sus propias etiquetas, así que un
+  texto guardado no puede inyectar HTML. No confundir con `lib/markdown.mjs`,
+  que es el export del historial a un fichero `.md`: aquel escribe Markdown,
+  este lo lee.
+- `lib/git.mjs` — lectura del estado de git de un repo vinculado (rama, árbol,
+  último commit, commits desde una fecha, base de la rama). **Todo de solo
+  lectura**, y devuelve `null` en vez de lanzar si el proyecto no es un repo o
+  git no responde.
+- `lib/consejo.mjs` — el copiloto de git: `aconsejar()` cruza el historial con
+  el estado del repo; `mensajeCommit()` redacta el commit desde el porqué
+  registrado; `grupos()` parte una tanda por sus `jump`, que es donde una cosa
+  deja de ser la misma; `sellosPendientes()` empareja entradas con commits;
+  `deriva()` detecta entradas cuyo código ya no está; `cuerpoPr()` redacta el PR.
+- `lib/captura.mjs` — el antes/después sale de `git diff`, no de que lo teclee
+  un agente. Era el 59% de lo que se escribía por MCP y ya estaba en el disco.
+  `capturar()` prueba el trabajo sin commitear, luego el último commit, y cae a
+  leer el archivo; `completarArchivos()` solo rellena lo que falta — el código
+  escrito a mano no se toca.
+- `lib/acciones.mjs` — lo único que EJECUTA algo: aplicar una propuesta
+  aceptada (lanza `claude -p` acotado con `--allowedTools`), commitear y subir.
+  Los trabajos viven en memoria y se consultan por HTTP mientras corren.
 - `lib/repofile.mjs` — `readFileAtCommit(repoPath, file, commit)`: lee el
   working tree actual, cae a `git show` solo si el archivo ya no existe ahí.
 - `lib/httpserver.mjs` — servidor `http` nativo, sin framework. Escucha en
@@ -156,8 +200,10 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias, 74 casos). Si tocas
+`npm test` (runner de `node:test`, sin dependencias, 137 casos). Si tocas
 `lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
+`lib/mdtext.mjs`, `lib/git.mjs`, `lib/consejo.mjs`, `lib/captura.mjs`,
+`server.mjs` (el coste en tokens está cubierto por `test/coste.test.mjs`),
 `lib/httpserver.mjs` o el ciclo de export/import, pásalas antes de dar nada
 por hecho — cubren justo lo que falla en silencio: el almacén con un fichero a
 medias o corrupto y con tres procesos escribiendo a la vez, las tres reglas
@@ -192,6 +238,24 @@ los apuntes al `data/` real.
   proyecto vinculado.** La web es una página en su localhost y no puede
   avisarte de nada: si el usuario aceptó algo entre sesiones, esa lista es el
   único sitio donde consta. Es trabajo comprometido y pendiente.
+- **Nada ocurre sin que el usuario pulse.** La herramienta puede ejecutar
+  —aplicar una propuesta lanzando a Claude, commitear, subir— pero solo desde
+  un botón que él aprieta. No hay tareas de fondo, ni nada que se dispare al
+  cargar la página, ni una heurística que decida commitear por su cuenta. El
+  clic es el usuario decidiendo; esa es la línea, no "la herramienta nunca
+  escribe". Por eso `lib/git.mjs` y `lib/consejo.mjs` siguen siendo de solo
+  lectura y todo lo que ejecuta vive en `lib/acciones.mjs`: quien lea aquellos
+  puede seguir fiándose de su garantía.
+- **Lo único que se le manda a Claude desde la web es una propuesta aceptada.**
+  No hay campo de texto libre en la página, y no se añade: el prompt lo compone
+  la herramienta a partir de algo ya escrito, revisado y aceptado en el
+  historial. Un cuadro de texto que llegue a un agente con permiso de escritura
+  es otra cosa, y no es esta.
+- **Las rutas que escriben piden token.** Se genera en cada arranque del
+  servidor, viaja dentro del HTML y no sale a ningún otro sitio; más una
+  comprobación de `Origin`. Sin eso, un puerto sin autenticar que lanza a
+  Claude sería una puerta abierta a la máquina. Si añades un endpoint que
+  escribe, ponle `autorizado(req)` — no es opcional.
 - **Las claves de `data/` no se reescriben a mano.** Si necesitas migrar el
   esquema de `changes.json`, hazlo con un script (como
   `scripts/seed-demo.mjs`), nunca editando el JSON directamente: los datos son
