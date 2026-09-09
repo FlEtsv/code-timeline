@@ -206,7 +206,9 @@ En la cabecera de cada proyecto aparece un panel con la rama, el estado del
   registraste. Botón para copiar el `git commit` entero.
 - **Esto son N commits, no uno** — cuando entre las entradas sin commitear hay
   un `jump`, que es literalmente un cambio de contexto declarado por quien lo
-  escribió. Ofrece abrir una rama para lo nuevo.
+  escribió. Y comprueba si se pueden separar: si los dos grupos tocan los
+  mismos archivos no basta con repartirlos, y te lo dice antes de que lo
+  descubras a mitad del commit.
 - **N entradas sin commitear sobre `main`** — una tanda larga en la rama
   principal es difícil de revisar y de deshacer.
 - **Pruebas en rojo a punto de entrar en git**, commits **sin subir**, y
@@ -497,7 +499,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-137 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+143 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e

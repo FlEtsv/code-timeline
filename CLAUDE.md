@@ -200,7 +200,7 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias, 137 casos). Si tocas
+`npm test` (runner de `node:test`, sin dependencias, 143 casos). Si tocas
 `lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
 `lib/mdtext.mjs`, `lib/git.mjs`, `lib/consejo.mjs`, `lib/captura.mjs`,
 `server.mjs` (el coste en tokens está cubierto por `test/coste.test.mjs`),
@@ -256,6 +256,12 @@ los apuntes al `data/` real.
   comprobación de `Origin`. Sin eso, un puerto sin autenticar que lanza a
   Claude sería una puerta abierta a la máquina. Si añades un endpoint que
   escribe, ponle `autorizado(req)` — no es opcional.
+- **Un id que nombra una carpeta de datos se canoniza antes de usarlo.**
+  `getProject` admite el id o la ruta del repo; `projectDir` lo normaliza con
+  `idCanonico` antes de construir la ruta. Sin eso, una llamada con una ruta
+  escribe en `data/projects/Users/steven/…` — un proyecto paralelo, en
+  silencio, devolviendo éxito. Pasó, y costó dos entradas. Si añades una
+  función que reciba un id y toque disco, pasa por `projectDir`.
 - **Las claves de `data/` no se reescriben a mano.** Si necesitas migrar el
   esquema de `changes.json`, hazlo con un script (como
   `scripts/seed-demo.mjs`), nunca editando el JSON directamente: los datos son

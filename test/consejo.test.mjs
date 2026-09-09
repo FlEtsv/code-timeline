@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   slug, grupos, mensajeCommit, comandoCommit, pendientesDeCommit, deriva, cuerpoPr, aconsejar,
+  sellosPendientes,
 } from '../lib/consejo.mjs';
 import { instantanea, commitsDesde } from '../lib/git.mjs';
 
@@ -249,7 +250,7 @@ test('con el árbol limpio no aconseja commitear nada', () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test('un salto entre lo pendiente pide separar commits y ofrece rama', () => {
+test('un salto con archivos compartidos avisa de que no basta repartir archivos', () => {
   const { dir } = repoGit();
   writeFileSync(join(dir, 'a.js'), 'const a = 2;\n');
   const ahora = Date.now();
@@ -263,8 +264,34 @@ test('un salto entre lo pendiente pide separar commits y ofrece rama', () => {
   const separar = r.consejos.find((c) => c.id === 'separar');
   assert.ok(separar, 'no detectó el salto');
   assert.match(separar.detalle, /no tiene que ver con lo anterior/);
-  // Se está en la rama principal, así que además ofrece abrir una.
-  assert.match(separar.comandos[0].texto, /git checkout -b otro-asunto/);
+  // Los dos grupos tocan a.js: repartir archivos no los separa, y decir
+  // "son dos commits" sin avisar mandaría a alguien a un callejón.
+  assert.match(separar.detalle, /mismo archivo|mismos archivos/);
+  assert.match(separar.comandos[0].texto, /git add -p/);
+  // Y en la rama principal, además, la rama.
+  assert.ok(separar.comandos.some((c) => /git checkout -b otro-asunto/.test(c.texto)));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('un salto sin archivos compartidos sí se separa repartiendo archivos', () => {
+  const { dir } = repoGit();
+  writeFileSync(join(dir, 'a.js'), 'const a = 2;\n');
+  writeFileSync(join(dir, 'b.js'), 'const b = 2;\n');
+  const ahora = Date.now();
+  const r = aconsejar({ id: 'tmp', name: 'Temporal', repoPath: dir }, [
+    cambio({ id: '1', date: new Date(ahora + 1000).toISOString(), title: 'Lo primero', files: [{ file: 'a.js', after: 'const a = 2;' }] }),
+    cambio({
+      id: '2', date: new Date(ahora + 2000).toISOString(), title: 'Otro asunto',
+      files: [{ file: 'b.js', after: 'const b = 2;' }],
+      relation: { type: 'jump', note: 'otra cosa' },
+    }),
+  ]);
+  const separar = r.consejos.find((c) => c.id === 'separar');
+  assert.ok(separar);
+  assert.match(separar.detalle, /Ningún archivo está en los dos grupos/);
+  // La orden trae solo los archivos del primer grupo.
+  assert.match(separar.comandos[0].texto, /git add a\.js/);
+  assert.doesNotMatch(separar.comandos[0].texto, /b\.js/);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -301,4 +328,76 @@ test('el PR avisa de lo que no debería fusionarse a ciegas', () => {
 
 test('sin entradas no se inventa un PR', () => {
   assert.equal(cuerpoPr({ id: 'x', name: 'X', repoPath: tmpdir() }, [], null), null);
+});
+
+// ── Sellar: en qué commit entró cada entrada ────────────────
+
+test('sellar acierta cuando dos commits seguidos tocan los mismos archivos', () => {
+  // El caso que rompió el emparejamiento por rutas en este propio repo: una
+  // tanda partida en dos commits que tocan el mismo archivo. Por rutas es
+  // indecidible; por contenido no.
+  const { dir, g } = repoGit();
+  writeFileSync(join(dir, 'a.js'), 'const uno = 1;\nconst dos = 2;\n');
+  g('add', '-A'); g('commit', '-m', 'base');
+
+  writeFileSync(join(dir, 'a.js'), 'const uno = 1;\nconst dos = 2;\nfunction primera() { return "PRIMERA"; }\n');
+  g('add', '-A'); g('commit', '-m', 'primera tanda');
+  const c1 = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+
+  writeFileSync(join(dir, 'a.js'), 'const uno = 1;\nconst dos = 2;\nfunction primera() { return "PRIMERA"; }\nfunction segunda() { return "SEGUNDA"; }\n');
+  g('add', '-A'); g('commit', '-m', 'segunda tanda');
+  const c2 = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+
+  const proyecto = { id: 'tmp', name: 'T', repoPath: dir };
+  const ayer = new Date(Date.now() - 86400000).toISOString();
+  const entradas = [
+    cambio({ id: 'e1', date: ayer, title: 'La primera', files: [{ file: 'a.js', after: 'function primera() { return "PRIMERA"; }\nconst dos = 2;' }] }),
+    cambio({ id: 'e2', date: ayer, title: 'La segunda', files: [{ file: 'a.js', after: 'function segunda() { return "SEGUNDA"; }\nconst dos = 2;' }] }),
+  ];
+
+  const sellos = sellosPendientes(proyecto, entradas, instantanea(dir));
+  const de = (id) => sellos.find((s) => s.changeId === id);
+  assert.equal(de('e1').commit, c1, 'la primera entrada es del primer commit');
+  assert.equal(de('e2').commit, c2, 'la segunda solo pudo entrar en el segundo');
+  assert.ok(de('e2').seguro, 'se decidió por contenido, no por conjetura');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('sellar no pisa un sello puesto salvo para corregirlo con pruebas', () => {
+  const { dir, g } = repoGit();
+  writeFileSync(join(dir, 'a.js'), 'const x = 1;\nconst y = 2;\n');
+  g('add', '-A'); g('commit', '-m', 'uno');
+  const bueno = execFileSync('git', ['rev-parse', '--short', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim();
+
+  const proyecto = { id: 'tmp', name: 'T', repoPath: dir };
+  const ayer = new Date(Date.now() - 86400000).toISOString();
+
+  // Sin recalcular, una entrada ya sellada ni se mira.
+  const yaSellada = [cambio({ id: 'x', date: ayer, commit: 'viejo00', files: [{ file: 'a.js', after: 'const x = 1;\nconst y = 2;' }] })];
+  assert.equal(sellosPendientes(proyecto, yaSellada, instantanea(dir)).length, 0);
+
+  // Con recalcular, se propone corregirlo y se dice a qué sello sustituye.
+  const corr = sellosPendientes(proyecto, yaSellada, instantanea(dir), { recalcular: true });
+  assert.equal(corr.length, 1);
+  assert.equal(corr[0].commit, bueno);
+  assert.equal(corr[0].corrige, 'viejo00');
+  assert.ok(corr[0].exacto, 'solo se pisa un sello con la comprobación de contenido hecha');
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('una entrada cuyo código no está en ningún commit no se sella a la fuerza', () => {
+  const { dir, g } = repoGit();
+  writeFileSync(join(dir, 'a.js'), 'const x = 1;\n');
+  g('add', '-A'); g('commit', '-m', 'uno');
+  writeFileSync(join(dir, 'b.js'), 'const y = 2;\n');
+  g('add', '-A'); g('commit', '-m', 'dos');
+
+  const proyecto = { id: 'tmp', name: 'T', repoPath: dir };
+  // Habla de un archivo que ningún commit toca.
+  const huerfana = [cambio({
+    id: 'h', date: new Date(Date.now() - 86400000).toISOString(),
+    files: [{ file: 'no-tocado.js', after: 'algo que no existe\nen ninguna parte' }],
+  })];
+  assert.deepEqual(sellosPendientes(proyecto, huerfana, instantanea(dir)), []);
+  rmSync(dir, { recursive: true, force: true });
 });

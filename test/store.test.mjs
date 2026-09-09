@@ -1,6 +1,6 @@
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -191,4 +191,27 @@ test('sellar no pisa un commit ya apuntado', () => {
 test('sellar aguanta ids que ya no existen y listas vacías', () => {
   assert.equal(store.stampCommits(p.id, []).sellados, 0);
   assert.equal(store.stampCommits(p.id, [{ changeId: 'fantasma', commit: 'abc' }]).sellados, 0);
+});
+
+test('nombrar un proyecto por su ruta escribe en SU carpeta, no en una inventada', () => {
+  // El fallo que esto vigila: getProject aprendió a resolver rutas, pero el
+  // resto del almacén usaba ese mismo string como nombre de carpeta. Una
+  // llamada con una ruta creaba "data/projects/Users/steven/..." — un
+  // proyecto paralelo, en silencio, cuyas entradas no salían en ninguna parte.
+  // Se perdieron dos entradas reales antes de verlo.
+  const antes = store.listChanges(p.id).length;
+  store.addChange('/tmp/repo', { title: 'por ruta', explanation: 'e', files: FILES });
+  assert.equal(store.listChanges(p.id).length, antes + 1,
+    'la entrada tiene que caer en el proyecto de siempre');
+  assert.equal(store.listChanges('/tmp/repo').length, antes + 1,
+    'y leerla por la ruta tiene que dar lo mismo que por el id');
+  assert.ok(!existsSync(join(DATA, 'projects', 'tmp')),
+    'no puede haberse creado ninguna carpeta a partir de la ruta');
+});
+
+test('leer y decidir por ruta también van al mismo sitio', () => {
+  const prop = store.addProposal('/tmp/repo', { title: 'p', explanation: 'e', files: FILES });
+  assert.ok(store.listByStatus(p.id, 'proposal').some((c) => c.id === prop.id));
+  store.decideProposal('/tmp/repo', prop.id, { decision: 'reject', note: 'no' });
+  assert.equal(store.listChanges(p.id).find((c) => c.id === prop.id).status, 'rejected');
 });

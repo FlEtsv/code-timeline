@@ -52,6 +52,17 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   **lenguaje se deduce de la extensión**, y cualquier herramienta acepta la
   **ruta del repo** en lugar del id — `list_projects` se llamaba 17 veces solo
   para averiguarlo.
+- **Sellar acierta por el contenido del archivo**, no solo por las rutas: se
+  comprueba si el código de la entrada está en el archivo tal como quedó en ese
+  commit. Resuelve el caso que las rutas no pueden —dos commits seguidos que
+  tocan los mismos archivos— y permite corregir un sello ya puesto cuando el
+  nuevo es demostrablemente mejor.
+- El aviso de "esto son N commits" **comprueba si la separación es posible**:
+  si los dos grupos comparten archivos, lo dice y manda a `git add -p` en vez
+  de a repartir archivos.
+- Arreglado: nombrar un proyecto por su **ruta** escribía en una carpeta
+  inventada (`data/projects/Users/…`) devolviendo éxito. `projectDir` canoniza
+  el id antes de construir la ruta.
 - **`test/coste.test.mjs`**: pruebas que miden el coste en tokens y fallan si
   alguien encarece la herramienta. Incluye un informe reproducible con tres
   escenarios.
