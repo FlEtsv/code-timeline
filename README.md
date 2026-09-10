@@ -267,8 +267,9 @@ Code Timeline esté instalado ni se le rompe el ciclo si falta.
 El historial guarda el **porqué**. Pero al revisar te encuentras código del que
 no sabes ni **qué** hace, y ahí el porqué no ayuda: falta el paso de antes.
 
-Cada panel de código tiene un botón **«No entiendo esto»**. Lo que sale es una
-explicación línea por línea, y cada explicación está **enlazada con su línea**:
+La explicación llega ya escrita por el agente al registrar el cambio y nace
+plegada. Cada panel que la contiene tiene un botón **«Revelar explicación»**.
+Lo que sale es una explicación línea por línea, y cada explicación está **enlazada con su línea**:
 pasas por encima de una y se ilumina la otra, en los dos sentidos. Las líneas
 sin explicar se atenúan, así que se ve de un vistazo qué está cubierto.
 
@@ -280,12 +281,14 @@ sin explicar se atenúan, así que se ve de un vistazo qué está cubierto.
   frente a **0,0652 $ y 38 s** si se pide luego, porque eso arranca una sesión
   aparte solo para leer el fragmento. Y sale mejor: quien lo escribió sabe por
   qué está así.
-- **Tres niveles de detalle.** Medido sobre el mismo código: concisa (12 líneas,
+- **Una calidad general para lo que venga después.** Se elige una vez arriba,
+  se recuerda en el navegador y se usa al generar o regenerar cualquier panel.
+  Los tres niveles, medidos sobre el mismo código: concisa (12 líneas,
   0,0432 $), normal (18 líneas, 0,0506 $) y extensa (19 líneas con el porqué y
   los casos límite, 0,0607 $). Entre niveles consecutivos hay +17% y +20% de
   coste, con +119% y +81% de contenido.
-- **Ver y ocultar.** La explicación siempre está guardada; el botón solo decide
-  si ocupa sitio, y se recuerda por panel.
+- **Revelar y ocultar.** La explicación siempre está guardada y empieza oculta;
+  el botón solo decide si ocupa sitio, y se recuerda por panel.
 - **Elige quién lo explica.** Sonnet por defecto —explicar código leído es
   trabajo acotado y pagar un modelo mayor es gastar de más—, con Opus, Fable y
   Haiku a un clic. Y si trabajas con **Codex**, también sale en la lista: no

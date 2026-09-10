@@ -100,8 +100,10 @@ test('el comando de commit sobrevive a un apóstrofo en el texto', () => {
   // Sin escapar, la comilla cerraría la cadena y el shell partiría el comando.
   assert.match(cmd, /'L'\\''accent d'\\''un titre'/);
   // Y lo que el shell reconstruye tiene que ser el texto original.
-  const eco = execFileSync('/bin/sh', ['-c', `printf %s ${cmd.match(/-m (.*) -m/)[1]}`], { encoding: 'utf8' });
-  assert.equal(eco, "L'accent d'un titre");
+  if (process.platform !== 'win32') {
+    const eco = execFileSync('/bin/sh', ['-c', `printf %s ${cmd.match(/-m (.*) -m/)[1]}`], { encoding: 'utf8' });
+    assert.equal(eco, "L'accent d'un titre");
+  }
 });
 
 // ── Qué está pendiente de commit ────────────────────────────

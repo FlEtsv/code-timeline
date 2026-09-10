@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { prompt, parsear, explicar, MAX_LINEAS, MOTORES, NIVELES } from '../lib/explicar.mjs';
-import { bloqueExplicacion } from '../lib/render.mjs';
+import { bloqueExplicacion, renderTimelineHtml } from '../lib/render.mjs';
 
 // Lo que se prueba aquí es todo menos la llamada al modelo: cómo se le pide,
 // cómo se lee lo que devuelve, y que lo que se pinta enlace de verdad cada
@@ -113,6 +113,21 @@ test('el texto de la explicación se escapa: viene de un modelo', () => {
   const html = bloqueExplicacion({ lineas: [{ n: 1, que: '<script>alert(1)</script>' }] });
   assert.doesNotMatch(html, /<script>/);
   assert.match(html, /&lt;script&gt;/);
+});
+
+test('la explicación registrada nace oculta y la calidad es global', () => {
+  const change = {
+    id: 'c1', status: 'change', date: '2026-09-10T00:00:00.000Z', title: 'Cambio',
+    explanation: 'Motivo', verified: false, test: { status: 'untested' }, relation: { type: 'start' },
+    files: [{ file: 'a.js', before: 'const a = 1;', after: 'const a = 2;', explicaciones: {
+      after: { lineas: [{ n: 1, que: 'Actualiza el valor.' }] },
+    } }],
+  };
+  const html = renderTimelineHtml({ id: 'p', name: 'Proyecto', repoPath: '/tmp/p' }, [change], null, null, 'token');
+  assert.match(html, /panel-after plegada/);
+  assert.match(html, />Revelar explicación</);
+  assert.equal((html.match(/id="explain-level"/g) || []).length, 1);
+  assert.doesNotMatch(html, /class="sel-nivel" data-lado=/);
 });
 
 // ── Motores y modelos ───────────────────────────────────────

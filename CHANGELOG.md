@@ -3,6 +3,13 @@
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico.
 
+## [1.1.1] — 2026-09-10
+
+- Corrige la resolución de proyectos mediante rutas absolutas en Windows.
+- Hace portable la prueba del escape POSIX y valida el workflow de resumen de PR.
+- Muestra las explicaciones creadas durante el registro bajo un botón «Revelar»
+  y mueve la calidad a una preferencia global para las respuestas futuras.
+
 ## [1.1.0] — 2026-09-10
 
 - Instalador único para registrar el MCP en Claude Code y Codex.

@@ -8,14 +8,15 @@ permissions:
 
 jobs:
   resumen:
-    if: ${{ hashFiles('.code-timeline/history.json') != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v4
+        if: ${{ hashFiles('.code-timeline/history.json') != '' }}
         with:
           node-version: 18
       - name: Publicar resumen verificable del PR
+        if: ${{ hashFiles('.code-timeline/history.json') != '' }}
         run: node scripts/pr-versionado.mjs
