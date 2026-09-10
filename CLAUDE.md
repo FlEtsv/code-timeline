@@ -163,6 +163,13 @@ archivo ya no existe ahí (renombrado/borrado), cae a
 - `lib/acciones.mjs` — lo único que EJECUTA algo: aplicar una propuesta
   aceptada (lanza `claude -p` acotado con `--allowedTools`), commitear y subir.
   Los trabajos viven en memoria y se consultan por HTTP mientras corren.
+- `lib/explicar.mjs` — explica un trozo de código línea por línea, para cuando
+  quien revisa no sabe qué hace. Dos motores (`claude` y `codex`) con modelo
+  elegible; devuelve `{lineas:[{n,que}], resumen, motor, modelo, gasto}`. Se
+  lanza en un directorio VACÍO y con `--strict-mcp-config`: si hereda el repo
+  carga su CLAUDE.md, sus MCP y sus hooks, y contesta sobre el proyecto en vez
+  de devolver el JSON. `parsear()` aguanta ``` y basura detrás, porque los
+  modelos la dejan.
 - `lib/repofile.mjs` — `readFileAtCommit(repoPath, file, commit)`: lee el
   working tree actual, cae a `git show` solo si el archivo ya no existe ahí.
 - `lib/httpserver.mjs` — servidor `http` nativo, sin framework. Escucha en
@@ -200,9 +207,10 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias, 151 casos). Si tocas
+`npm test` (runner de `node:test`, sin dependencias, 175 casos). Si tocas
 `lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
 `lib/mdtext.mjs`, `lib/git.mjs`, `lib/consejo.mjs`, `lib/captura.mjs`,
+`lib/explicar.mjs`,
 `server.mjs` (el coste en tokens está cubierto por `test/coste.test.mjs`),
 `lib/httpserver.mjs` o el ciclo de export/import, pásalas antes de dar nada
 por hecho — cubren justo lo que falla en silencio: el almacén con un fichero a
@@ -269,6 +277,10 @@ los apuntes al `data/` real.
   `import_project` puede traer un timeline escrito por otro. Si añades una
   acción que pase contenido guardado a un modelo con permiso de escritura,
   vállalo igual.
+- **Una explicación no toca el código.** `setExplicacion` la guarda colgada del
+  archivo y del lado (antes/después) de la entrada, nunca dentro del archivo.
+  Meter los comentarios en el código sería cambiar el código del usuario para
+  que él lo entienda, y además el historial dejaría de cuadrar con el repo.
 - **Las claves de `data/` no se reescriben a mano.** Si necesitas migrar el
   esquema de `changes.json`, hazlo con un script (como
   `scripts/seed-demo.mjs`), nunca editando el JSON directamente: los datos son

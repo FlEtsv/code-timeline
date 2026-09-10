@@ -222,6 +222,30 @@ falta saber el `projectId` — y, **si el repo no está vinculado, no hace nada 
 sale con 0**. Así quien lo invoque no depende de que
 Code Timeline esté instalado ni se le rompe el ciclo si falta.
 
+### Cuando no entiendes un trozo de código
+
+El historial guarda el **porqué**. Pero al revisar te encuentras código del que
+no sabes ni **qué** hace, y ahí el porqué no ayuda: falta el paso de antes.
+
+Cada panel de código tiene un botón **«No entiendo esto»**. Lo que sale es una
+explicación línea por línea, y cada explicación está **enlazada con su línea**:
+pasas por encima de una y se ilumina la otra, en los dos sentidos. Las líneas
+sin explicar se atenúan, así que se ve de un vistazo qué está cubierto.
+
+- **La explicación no toca el código.** Es una capa de lectura que se guarda
+  aparte, en la entrada. Meter los comentarios en el archivo sería cambiar tu
+  código para que tú lo entiendas.
+- **Elige quién lo explica.** Sonnet por defecto —explicar código leído es
+  trabajo acotado y pagar un modelo mayor es gastar de más—, con Opus, Fable y
+  Haiku a un clic. Y si trabajas con **Codex**, también sale en la lista: no
+  hace falta tener Claude para leer una explicación.
+- **Se ve lo que costó.** Tokens de entrada y salida, y el precio cuando el
+  motor lo publica, para decidir si compensa rehacerlo con otro modelo.
+
+Los paneles de código **no scrollean en horizontal**: las líneas largas se
+ajustan y siguen debajo. Para que se siga distinguiendo dónde empieza cada
+línea, cada una lleva su número y un guion tenue al principio.
+
 ### El copiloto de git
 
 Code Timeline sabe algo que `git` no sabe: el **porqué** de cada cambio,
@@ -529,7 +553,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-151 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+175 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e

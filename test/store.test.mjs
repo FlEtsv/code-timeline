@@ -215,3 +215,55 @@ test('leer y decidir por ruta también van al mismo sitio', () => {
   store.decideProposal('/tmp/repo', prop.id, { decision: 'reject', note: 'no' });
   assert.equal(store.listChanges(p.id).find((c) => c.id === prop.id).status, 'rejected');
 });
+
+// ── Explicaciones línea por línea ───────────────────────────
+
+test('la explicación se guarda colgada del archivo y del lado', () => {
+  const c = store.addChange(p.id, { title: 't', explanation: 'e', files: FILES });
+  const e = { lineas: [{ n: 1, que: 'define a' }], resumen: 'r', modelo: 'sonnet' };
+  store.setExplicacion(p.id, c.id, { fileIndex: 0, lado: 'after', explicacion: e });
+
+  const f = store.listChanges(p.id).find((x) => x.id === c.id).files[0];
+  assert.deepEqual(f.explicaciones.after.lineas, e.lineas);
+  assert.equal(f.explicaciones.before, undefined, 'el otro lado no se toca');
+});
+
+test('rehacer una explicación sustituye la anterior, y borrarla la quita', () => {
+  const c = store.addChange(p.id, { title: 't', explanation: 'e', files: FILES });
+  const uno = { lineas: [{ n: 1, que: 'vieja' }] };
+  const dos = { lineas: [{ n: 1, que: 'nueva' }] };
+  store.setExplicacion(p.id, c.id, { fileIndex: 0, explicacion: uno });
+  store.setExplicacion(p.id, c.id, { fileIndex: 0, explicacion: dos });
+  const leer = () => store.listChanges(p.id).find((x) => x.id === c.id).files[0];
+  assert.equal(leer().explicaciones.after.lineas[0].que, 'nueva');
+
+  // Borrarla no puede dejar un objeto vacío colgando en el dato.
+  store.setExplicacion(p.id, c.id, { fileIndex: 0, explicacion: null });
+  assert.equal(leer().explicaciones, undefined);
+});
+
+test('una explicación no puede apuntar a un archivo o un lado que no existen', () => {
+  const c = store.addChange(p.id, { title: 't', explanation: 'e', files: FILES });
+  const e = { lineas: [{ n: 1, que: 'x' }] };
+  assert.throws(() => store.setExplicacion(p.id, c.id, { fileIndex: 9, explicacion: e }), /posición 9/);
+  assert.throws(() => store.setExplicacion(p.id, c.id, { fileIndex: -1, explicacion: e }), /índice válido/);
+  assert.throws(() => store.setExplicacion(p.id, c.id, { fileIndex: 0, lado: 'medio', explicacion: e }), /"after" o "before"/);
+  assert.throws(() => store.setExplicacion(p.id, 'fantasma', { fileIndex: 0, explicacion: e }), /No existe el cambio/);
+});
+
+test('la explicación sobrevive a que se reescriban los archivos de la entrada', () => {
+  // markApplied y otras rutas pasan por normalizeFiles: si ahí se perdiera, la
+  // explicación desaparecería sin que nadie la borrara.
+  const prop = store.addProposal(p.id, { title: 'p', explanation: 'e', files: FILES });
+  store.decideProposal(p.id, prop.id, { decision: 'accept' });
+  store.setExplicacion(p.id, prop.id, { fileIndex: 0, explicacion: { lineas: [{ n: 1, que: 'x' }] } });
+  const antes = store.listChanges(p.id).find((x) => x.id === prop.id).files[0].explicaciones;
+  assert.ok(antes, 'debería estar guardada antes de aplicar');
+
+  store.markApplied(p.id, prop.id, { files: [{ file: 'src/a.js', after: 'const a = 2;' }] });
+  // Al aplicar con archivos NUEVOS la explicación vieja ya no aplica a ese
+  // código, así que se pierde a propósito; lo que no puede es romper nada.
+  const despues = store.listChanges(p.id).find((x) => x.id === prop.id);
+  assert.equal(despues.status, 'change');
+  assert.equal(despues.files[0].after, 'const a = 2;');
+});

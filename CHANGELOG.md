@@ -73,6 +73,16 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   el NUL del marcador de Markdown).
 - El contenido de una propuesta viaja **vallado** en el prompt de la sesión que
   la aplica, con marca sorteada por llamada: es dato, no instrucción.
+- **Explicación línea por línea** de cualquier panel de código
+  (`lib/explicar.mjs`): botón «No entiendo esto», cada explicación enlazada con
+  su línea por resalto en ambos sentidos, y las líneas sin explicar atenuadas.
+  No toca el código: se guarda aparte, en la entrada. Motor y modelo elegibles
+  —Sonnet por defecto, y Codex también— y se muestra el gasto en tokens.
+- Los paneles de código **ya no scrollean en horizontal**: las líneas se ajustan
+  y cada una lleva número y un guion tenue para saber dónde empieza.
+- Los caracteres de control (un NUL en el código guardado) se limpian **al
+  pintar**, no al guardar: dejaban la página como binaria para cualquier
+  herramienta que la leyera.
 - **`scripts/medir-coste.mjs`** (`npm run coste`): mide sobre TUS transcripts de
   Claude Code cuánto encarece la herramienta una sesión, leyendo el `usage`
   real. El número del README se rehace con un comando en vez de creérselo.
