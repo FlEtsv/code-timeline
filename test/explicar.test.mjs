@@ -196,3 +196,10 @@ test('un nivel desconocido cae a normal en vez de romper', () => {
   assert.equal(instrucciones(prompt('x', { nivel: 'inventado' })), instrucciones(prompt('x', { nivel: 'normal' })));
   assert.equal(instrucciones(prompt('x')), instrucciones(prompt('x', { nivel: 'normal' })));
 });
+test('el nivel usado queda guardado, para saber qué se pidió', () => {
+  const html = bloqueExplicacion({ lineas: [{ n: 1, que: 'x' }], nivel: 'extensa', modelo: 'sonnet' });
+  assert.match(html, /Extensa ·/);
+  // Una explicación vieja, de antes de que hubiera niveles, no inventa uno.
+  const vieja = bloqueExplicacion({ lineas: [{ n: 1, que: 'x' }], modelo: 'sonnet' });
+  assert.doesNotMatch(vieja, /Concisa|Normal|Extensa/);
+});
