@@ -235,6 +235,17 @@ sin explicar se atenúan, así que se ve de un vistazo qué está cubierto.
 - **La explicación no toca el código.** Es una capa de lectura que se guarda
   aparte, en la entrada. Meter los comentarios en el archivo sería cambiar tu
   código para que tú lo entiendas.
+- **Se escribe al registrar el cambio, no después.** Quien acaba de escribir el
+  código lo tiene en contexto: medido, explicarlo ahí cuesta **0,0161 $ y 15 s**
+  frente a **0,0652 $ y 38 s** si se pide luego, porque eso arranca una sesión
+  aparte solo para leer el fragmento. Y sale mejor: quien lo escribió sabe por
+  qué está así.
+- **Tres niveles de detalle.** Medido sobre el mismo código: concisa (12 líneas,
+  0,0432 $), normal (18 líneas, 0,0506 $) y extensa (19 líneas con el porqué y
+  los casos límite, 0,0607 $). Entre niveles consecutivos hay +17% y +20% de
+  coste, con +119% y +81% de contenido.
+- **Ver y ocultar.** La explicación siempre está guardada; el botón solo decide
+  si ocupa sitio, y se recuerda por panel.
 - **Elige quién lo explica.** Sonnet por defecto —explicar código leído es
   trabajo acotado y pagar un modelo mayor es gastar de más—, con Opus, Fable y
   Haiku a un clic. Y si trabajas con **Codex**, también sale en la lista: no
@@ -553,7 +564,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-175 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+181 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e

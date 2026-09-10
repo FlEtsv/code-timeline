@@ -103,6 +103,10 @@ server.registerTool(
       'y por qué. NO ESCRIBAS el código: basta con la ruta de cada archivo — el antes/después se captura solo de git diff, ' +
       'que es exacto y no te cuesta tokens. Escribe "after" a mano solo si el código no está en git (lo editaste fuera del repo) ' +
       'o si quieres enseñar un fragmento distinto del que saldría del diff. ' +
+      'EXPLICA LAS LÍNEAS QUE NO SE ENTIENDEN SOLAS en "explicaLineas": acabas de escribir ese código y lo tienes en contexto, ' +
+      'así que hacerlo ahora sale 4 veces más barato y 2,5 veces más rápido que pedirlo después desde la web —que tiene que ' +
+      'arrancar una sesión aparte solo para leerlo—, y sale mejor, porque tú sabes por qué está escrito así. ' +
+      'No expliques lo obvio: un renombrado o un ajuste de formato no necesitan nada, y una llave de cierre tampoco. ' +
       'Si el cambio continúa directamente al anterior, deja relationType sin especificar (por defecto "continuation"). ' +
       'Si NO tiene relación con el cambio anterior (otro commit, otro problema, otro momento), pon relationType="jump" y explica el salto en relationNote.',
     inputSchema: {
@@ -116,6 +120,18 @@ server.registerTool(
       date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
       relationType: z.enum(['continuation', 'jump', 'start']).optional(),
       relationNote: z.string().optional().describe('Obligatorio si relationType="jump": explica qué distingue este cambio del anterior'),
+      explicaLineas: z.array(z.object({
+        file: z.string().describe('Ruta del archivo, la misma que en "files"'),
+        lineas: z.array(z.object({
+          n: z.number().describe('Número de línea DENTRO del fragmento capturado, empezando en 1'),
+          que: z.string().describe('Qué hace esa línea. Concreto: nombra las variables y funciones que aparecen'),
+        })).min(1),
+        resumen: z.string().optional().describe('Una frase: qué hace el fragmento en conjunto'),
+      })).optional().describe(
+        'Explicación línea por línea de los archivos cuyo código no se entienda leyéndolo. Se guarda junto al cambio y la web ' +
+        'la enseña enlazada con cada línea, sin tocar el archivo. Salta las líneas obvias: es mejor no decir nada que decir ' +
+        '"cierra el bloque". Si el cambio es evidente, omite este campo entero.',
+      ),
       test: z.object({
         status: z.enum(['untested', 'auto', 'manual', 'failing']),
         command: z.string().optional(),

@@ -267,3 +267,36 @@ test('la explicación sobrevive a que se reescriban los archivos de la entrada',
   assert.equal(despues.status, 'change');
   assert.equal(despues.files[0].after, 'const a = 2;');
 });
+
+test('la explicación escrita al vuelo se guarda con el cambio', () => {
+  const c = store.addChange(p.id, {
+    title: 't', explanation: 'e', files: FILES,
+    explicaLineas: [{
+      file: 'src/a.js',
+      lineas: [{ n: 2, que: 'la segunda' }, { n: 1, que: 'la primera' }, { n: 'x', que: 'basura' }],
+      resumen: 'un resumen',
+    }],
+  });
+  const e = c.files[0].explicaciones.after;
+  assert.deepEqual(e.lineas.map((l) => l.n), [1, 2], 'ordenadas y sin basura');
+  assert.equal(e.resumen, 'un resumen');
+  // Se marca distinto de las pedidas después: quien la escribió tenía el repo
+  // delante, no solo el fragmento.
+  assert.match(e.modelo, /quien escribió/);
+});
+
+test('una explicación al vuelo que no cuadra con ningún archivo se ignora', () => {
+  const c = store.addChange(p.id, {
+    title: 't', explanation: 'e', files: FILES,
+    explicaLineas: [{ file: 'otro/fichero.js', lineas: [{ n: 1, que: 'x' }] }],
+  });
+  assert.equal(c.files[0].explicaciones, undefined, 'no se cuelga del archivo equivocado');
+});
+
+test('una lista de líneas vacía no deja una explicación fantasma', () => {
+  const c = store.addChange(p.id, {
+    title: 't', explanation: 'e', files: FILES,
+    explicaLineas: [{ file: 'src/a.js', lineas: [{ n: 'x', que: '' }] }],
+  });
+  assert.equal(c.files[0].explicaciones, undefined);
+});

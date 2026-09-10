@@ -40,6 +40,17 @@ en cualquier proyecto, sin tener que abrir este repo. Herramientas:
   distinto del que saldría del diff. `lineStart`/`lineEnd` son opcionales y
   sirven para acotar cuando en el mismo archivo hay varios cambios sueltos y
   solo uno es de esta entrada.
+
+  **Explica las líneas que no se entienden solas, en `explicaLineas`.** Acabas
+  de escribir ese código y lo tienes en contexto, así que hacerlo ahora sale
+  **4 veces más barato y 2,5 veces más rápido** que pedirlo después desde la
+  web —que arranca una sesión aparte solo para leer el fragmento— y sale mejor,
+  porque tú sabes por qué está escrito así y ella solo ve el trozo. Medido:
+  +0,0161 $ y +15 s al vuelo, frente a 0,0652 $ y 38 s a demanda.
+
+  No expliques lo obvio. Un renombrado, un ajuste de formato o un texto de UI
+  no necesitan nada, y una llave de cierre tampoco: es mejor no decir nada que
+  decir "cierra el bloque". Si el cambio entero es evidente, omite el campo.
 - `render_timeline(projectId)` — regenera el HTML estático (para exportar o
   como respaldo legible en git). La vista viva es el servidor, no esto.
 - `list_changes` — el historial SIN código: título, porqué recortado, archivos,
@@ -207,7 +218,7 @@ falta en un scroll largo. Explorado primero como canvas de diseño
 
 ## Pruebas
 
-`npm test` (runner de `node:test`, sin dependencias, 175 casos). Si tocas
+`npm test` (runner de `node:test`, sin dependencias, 181 casos). Si tocas
 `lib/store.mjs`, `lib/datadir.mjs`, `lib/highlight.mjs`, `lib/markdown.mjs`,
 `lib/mdtext.mjs`, `lib/git.mjs`, `lib/consejo.mjs`, `lib/captura.mjs`,
 `lib/explicar.mjs`,
@@ -277,6 +288,10 @@ los apuntes al `data/` real.
   `import_project` puede traer un timeline escrito por otro. Si añades una
   acción que pase contenido guardado a un modelo con permiso de escritura,
   vállalo igual.
+- **La explicación se escribe al registrar, no después.** Es lo mismo que con
+  el código capturado: hacerlo cuando tienes el contexto sale más barato y
+  mejor. El botón «No entiendo esto» de la web existe para el código viejo y
+  para cuando la del momento se quedó corta, no como vía principal.
 - **Una explicación no toca el código.** `setExplicacion` la guarda colgada del
   archivo y del lado (antes/después) de la entrada, nunca dentro del archivo.
   Meter los comentarios en el código sería cambiar el código del usuario para
