@@ -458,6 +458,13 @@ Una entrada sabe además si su rama sigue **viva**, ya se **fusionó** (y por qu
 commit entró en la principal) o quedó **huérfana** (se revirtió o se reescribió
 sin registrarlo).
 
+En la web, cuando el repo tiene más de una rama aparece una **franja de ramas**
+sobre el timeline: cada una con su posición respecto a la principal, si está
+fusionada y cuántos commits suyos no están registrados. Pulsar una filtra el
+historial a sus entradas (`/p/<id>?branch=<rama>`, funciona sin JavaScript);
+`?fetch=1` trae del remoto antes de pintar. Cada tarjeta muestra ya el autor y
+la rama.
+
 ## El CLI
 
 `code-timeline sync [<projectId>] [--repo ruta] [--branch B]` informa de `N cambios sin registrar`,

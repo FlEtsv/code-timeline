@@ -114,6 +114,10 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   sabe además si su rama sigue viva, ya se fusionó (y por qué commit) o quedó
   huérfana. La herramienta MCP `branch_report` devuelve lo mismo estructurado.
   Todo de solo lectura salvo `--fetch`.
+- **En la web**, con más de una rama, una franja sobre el timeline con la
+  posición de cada rama, si está fusionada y sus commits sin registrar; pulsar
+  una filtra el historial (`?branch=`, sin JavaScript), `?fetch=1` trae del
+  remoto antes. El autor y la rama se ven en cada tarjeta.
 
 ### Corregido antes del lanzamiento
 
