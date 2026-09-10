@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prompt, parsear, explicar, MAX_LINEAS, MOTORES } from '../lib/explicar.mjs';
+import { prompt, parsear, explicar, MAX_LINEAS, MOTORES, NIVELES } from '../lib/explicar.mjs';
 import { bloqueExplicacion } from '../lib/render.mjs';
 
 // Lo que se prueba aquí es todo menos la llamada al modelo: cómo se le pide,
@@ -169,4 +169,30 @@ test('el gasto se enseña para poder decidir si compensa rehacerlo', () => {
   // Y sin dato de gasto, no se enseña un hueco.
   const sinGasto = bloqueExplicacion({ lineas: [{ n: 1, que: 'x' }], modelo: 'sonnet' });
   assert.doesNotMatch(sinGasto, /tokens/);
+});
+
+// ── Cuánto detalle ──────────────────────────────────────────
+
+test('los tres niveles piden cosas distintas, no lo mismo con otras palabras', () => {
+  const c = prompt('x', { nivel: 'concisa' });
+  const n = prompt('x', { nivel: 'normal' });
+  const e = prompt('x', { nivel: 'extensa' });
+  assert.notEqual(c, n);
+  assert.notEqual(n, e);
+
+  // Concisa aprieta para saltar líneas; extensa pide el porqué y los casos
+  // límite. Medido sobre código real: +17% de coste de concisa a normal y
+  // +20% de normal a extensa, con +119% y +81% de contenido.
+  assert.match(c, /SOLO lo que no se entiende/);
+  assert.match(e, /POR QUÉ está/);
+  assert.match(e, /caso límite/);
+});
+
+test('un nivel desconocido cae a normal en vez de romper', () => {
+  // A diferencia del motor, aquí caer es inofensivo: se explica igual, solo
+  // que con el detalle de siempre. Se comparan las instrucciones y no el
+  // prompt entero, porque la valla se sortea en cada llamada.
+  const instrucciones = (t) => t.split('Devuelve SOLO un JSON')[1];
+  assert.equal(instrucciones(prompt('x', { nivel: 'inventado' })), instrucciones(prompt('x', { nivel: 'normal' })));
+  assert.equal(instrucciones(prompt('x')), instrucciones(prompt('x', { nivel: 'normal' })));
 });
