@@ -3,6 +3,17 @@
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico.
 
+## [1.1.0] — 2026-09-10
+
+- Instalador único para registrar el MCP en Claude Code y Codex.
+- Anotaciones MCP de lectura y escritura para políticas seguras.
+- Detección explícita de archivos modificados sin entrada de historial.
+- Identificador estable `hunkId` por fragmento de código.
+- Almacenamiento versionado opcional en `.code-timeline/history.json`.
+- Resumen del timeline en GitHub Actions para cada PR versionado.
+- Portada con propuesta de valor y prueba de 60 segundos.
+- Protocolo medible para cinco pilotos externos.
+
 ## [1.0.0] — pendiente de publicar
 
 Primera versión pública. Lo que hay hasta aquí no tiene versiones anteriores

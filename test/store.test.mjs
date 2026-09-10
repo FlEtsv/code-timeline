@@ -1,6 +1,6 @@
 import { test, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -25,6 +25,25 @@ test('un cambio nuevo nace como "change" y sin revisar', () => {
   assert.equal(c.status, 'change');
   assert.equal(c.verified, false);
   assert.equal(c.relation.type, 'start');
+});
+
+test('cada fragmento tiene una identidad estable por contenido', () => {
+  const uno = store.addChange(p.id, { title: 't', explanation: 'e', files: FILES });
+  const dos = store.addChange(p.id, { title: 't2', explanation: 'e2', files: FILES });
+  assert.match(uno.files[0].hunkId, /^[0-9a-f]{16}$/);
+  assert.equal(uno.files[0].hunkId, dos.files[0].hunkId);
+});
+
+test('el modo versionado espeja el historial dentro del repo', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'ct-versionado-'));
+  const v = store.createProject({ name: 'Versionado', repoPath: repo, storageMode: 'versioned' });
+  store.addChange(v.id, { title: 't', explanation: 'e', files: FILES });
+  const path = join(repo, '.code-timeline', 'history.json');
+  assert.ok(existsSync(path));
+  const espejo = JSON.parse(readFileSync(path, 'utf8'));
+  assert.equal(espejo.format, 'code-timeline/versioned-v1');
+  assert.equal(espejo.changes.length, 1);
+  rmSync(repo, { recursive: true, force: true });
 });
 
 test('title y explanation son obligatorios', () => {

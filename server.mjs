@@ -16,6 +16,8 @@ import { renderMarkdown } from './lib/markdown.mjs';
 import { startWeb, stopWeb, webStatus } from './lib/webproc.mjs';
 
 const server = new McpServer({ name: 'code-timeline', version: '1.0.0' });
+const SOLO_LECTURA = { readOnlyHint: true, destructiveHint: false, idempotentHint: true };
+const ESCRITURA_SEGURA = { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
 
 // Devuelve el id canónico admitiendo también la ruta del repo. La resolución
 // vive en el almacén (getProject); esto solo la normaliza antes de pasarla a
@@ -50,6 +52,7 @@ server.registerTool(
   'list_projects',
   {
     title: 'Listar proyectos vinculados',
+    annotations: SOLO_LECTURA,
     description: 'Lista todos los proyectos registrados en Code Timeline, con su id, ruta y número de cambios registrados.',
     inputSchema: {},
   },
@@ -71,20 +74,23 @@ server.registerTool(
   'link_project',
   {
     title: 'Vincular un proyecto nuevo',
+    annotations: ESCRITURA_SEGURA,
     description: 'Registra un repositorio para poder llevarle un historial de cambios. Se hace una vez por proyecto.',
     inputSchema: {
       name: z.string().describe('Nombre legible del proyecto, ej. "Dashboard Inventario"'),
       repoPath: z.string().describe('Ruta absoluta al repositorio en disco'),
       githubRemote: z.string().optional().describe('URL del remoto de GitHub, si existe'),
+      storageMode: z.enum(['private', 'versioned']).optional().describe('"private" guarda fuera del repo; "versioned" espeja en .code-timeline/history.json'),
     },
   },
-  async ({ name, repoPath, githubRemote }) => text(createProject({ name, repoPath, githubRemote })),
+  async ({ name, repoPath, githubRemote, storageMode }) => text(createProject({ name, repoPath, githubRemote, storageMode })),
 );
 
 server.registerTool(
   'get_project',
   {
     title: 'Ver metadatos de un proyecto',
+    annotations: SOLO_LECTURA,
     description: 'Devuelve los metadatos completos de un proyecto vinculado.',
     inputSchema: { projectId: z.string() },
   },
@@ -95,6 +101,7 @@ server.registerTool(
   'add_change',
   {
     title: 'Registrar un cambio de código YA APLICADO',
+    annotations: ESCRITURA_SEGURA,
     description:
       'SOLO para código que ya has escrito en el repo. Si todavía no lo has tocado y lo que quieres es sugerirlo, usa propose_change. ' +
       'Se registra TODO cambio de código, sin filtrar por importancia: un renombrado, un texto de UI o un ajuste de formato ' +
@@ -162,6 +169,7 @@ server.registerTool(
   'list_changes',
   {
     title: 'Listar cambios registrados',
+    annotations: SOLO_LECTURA,
     description:
       'Devuelve las entradas del historial de un proyecto, en orden cronológico, SIN el código: título, porqué ' +
       'recortado, archivos, unidad, estado y prueba. Es lo que hace falta para orientarse, y cuesta un 10% de lo ' +
@@ -176,6 +184,7 @@ server.registerTool(
   'buscar',
   {
     title: 'Buscar en el historial sin traérselo entero',
+    annotations: SOLO_LECTURA,
     description:
       'Busca por texto en el título, el porqué, la unidad y las rutas de un proyecto, y devuelve las entradas que casan ' +
       'con un trozo del porqué alrededor de donde casa. Úsalo en vez de list_changes cuando busques algo concreto ' +
@@ -194,6 +203,7 @@ server.registerTool(
   'estado',
   {
     title: 'Dónde estoy y qué me reclama algo',
+    annotations: SOLO_LECTURA,
     description:
       'Lo primero al ponerte a trabajar en un repo. En una sola llamada: si está vinculado, qué hay pendiente ' +
       '(propuestas por decidir, aceptadas sin escribir, pruebas en rojo) y qué convendría hacer con git. ' +
@@ -211,6 +221,11 @@ server.registerTool(
     const changes = listChanges(project.id);
     const r = aconsejar(project, changes);
     const aceptadas = changes.filter((c) => c.status === 'accepted');
+    const registrados = new Set((r.pendientes || []).flatMap((c) => (c.files || []).map((f) => f.file)));
+    const tocados = r.git && r.git.estado
+      ? [...r.git.estado.modificados, ...r.git.estado.sinSeguimiento]
+      : [];
+    const sinEntrada = tocados.filter((f) => !registrados.has(f));
     return text({
       proyecto: project.id,
       entradas: changes.filter((c) => (c.status || 'change') === 'change').length,
@@ -219,6 +234,8 @@ server.registerTool(
       propuestasPorDecidir: changes.filter((c) => c.status === 'proposal').map((c) => ({ id: c.id, title: c.title })),
       aceptadasSinEscribir: aceptadas.map((c) => ({ id: c.id, title: c.title })),
       pruebasEnRojo: changes.filter((c) => c.test && c.test.status === 'failing').map((c) => c.title),
+      historialCompleto: sinEntrada.length === 0,
+      archivosSinEntrada: sinEntrada,
       git: r.git ? { rama: r.git.rama, arbolLimpio: r.git.estado ? r.git.estado.limpio : null, sinEmpujar: r.git.sinEmpujar } : null,
       consejos: r.consejos.map((c) => ({ id: c.id, titulo: c.titulo })),
     });
@@ -229,6 +246,7 @@ server.registerTool(
   'get_change',
   {
     title: 'Una entrada del historial, entera',
+    annotations: SOLO_LECTURA,
     description:
       'Devuelve UNA entrada completa, con el código antes/después de cada archivo. Úsalo cuando list_changes te ' +
       'haya dicho cuál te interesa: traerte el historial entero con el código dentro cuesta diez veces más y casi ' +
@@ -242,6 +260,7 @@ server.registerTool(
   'render_timeline',
   {
     title: 'Exportar el timeline a un HTML estático',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Escribe en disco una foto estática del timeline de un proyecto (para archivar o abrir sin servidor). ' +
       'La vista viva e interactiva (con "revisado" y notas) es start_web, no esto.',
@@ -261,6 +280,7 @@ server.registerTool(
   'web',
   {
     title: 'La web local del historial',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Controla el servidor web donde el usuario lee y revisa el historial. accion "abrir" lo levanta (reutiliza el que ' +
       'ya esté corriendo en vez de duplicarlo) y devuelve la URL; "estado" dice si sigue vivo; "cerrar" lo para. ' +
@@ -282,6 +302,7 @@ server.registerTool(
   'propose_change',
   {
     title: 'Proponer un cambio que todavía NO has aplicado',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Registra una PROPUESTA: código que crees que habría que cambiar pero que no has tocado. Aparece aparte del historial, ' +
       'arriba, esperando que el usuario la acepte o la descarte desde la web. Aceptada, pasa a ser un cambio del historial; ' +
@@ -311,6 +332,7 @@ server.registerTool(
   'list_proposals',
   {
     title: 'Listar propuestas',
+    annotations: SOLO_LECTURA,
     description:
       'Devuelve las propuestas de un proyecto según su estado. ' +
       '"proposal" (por defecto): pendientes de que el usuario decida. ' +
@@ -334,6 +356,7 @@ server.registerTool(
   'decide_proposal',
   {
     title: 'Aceptar o descartar una propuesta',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Marca una propuesta como aceptada o descartada. Aceptar NO la mete en el historial: la deja en estado ' +
       '"accepted" (aprobada, pendiente de aplicar), porque en ese momento el código todavía no existe. ' +
@@ -354,6 +377,7 @@ server.registerTool(
   'exchange_project',
   {
     title: 'Sacar o meter un historial completo',
+    annotations: ESCRITURA_SEGURA,
     description:
       'direccion "export" escribe el historial entero a un fichero: "json" para respaldar o llevarlo a otra máquina, ' +
       '"md" para leerlo o compartirlo. Como data/ no se versiona, esto es la vía de respaldo. ' +
@@ -391,6 +415,7 @@ server.registerTool(
   'mark_applied',
   {
     title: 'Confirmar que una propuesta aceptada ya está escrita',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Cierra el círculo de una propuesta: pasa de "aceptada" a cambio del historial. Llámalo DESPUÉS de haber ' +
       'escrito el código de verdad en el repo, nunca antes — el historial dice lo que está en el código. ' +
@@ -412,6 +437,7 @@ server.registerTool(
   'set_test',
   {
     title: 'Registrar cómo se comprueba un cambio',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Deja constancia de cómo se prueba una entrada del historial. Es distinto de "revisado": revisar es que el ' +
       'usuario lo haya leído; probar es que algo lo haya ejecutado. Un cambio puede estar revisado y sin probar. ' +
@@ -440,6 +466,7 @@ server.registerTool(
   'git_advice',
   {
     title: 'Qué convendría hacer con git ahora',
+    annotations: SOLO_LECTURA,
     description:
       'Cruza el historial con el estado del repo y devuelve qué convendría hacer: si toca un commit —con el mensaje ya ' +
       'redactado a partir del PORQUÉ que registraste, no del diff—, si la tanda son en realidad varios commits porque ' +
@@ -471,6 +498,7 @@ server.registerTool(
   'stamp_commits',
   {
     title: 'Apuntar en cada entrada el commit que la recogió',
+    annotations: ESCRITURA_SEGURA,
     description:
       'Busca, para cada entrada sin commit apuntado, el primer commit posterior que toca sus archivos, y lo sella. ' +
       'Enlaza el historial con git: la vista a pantalla completa puede entonces leer el archivo tal como estaba, y ' +
@@ -495,6 +523,7 @@ server.registerTool(
   'pr_body',
   {
     title: 'Redactar el cuerpo de un PR desde el historial',
+    annotations: SOLO_LECTURA,
     description:
       'Devuelve en Markdown qué cambia, por qué y cómo se ha probado, a partir de las entradas registradas en la rama ' +
       'actual (desde que se separó de la principal). Sirve para la descripción de un pull request o para el ' +

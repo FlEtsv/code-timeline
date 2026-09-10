@@ -4,10 +4,11 @@
 [![Node 18+](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![Licencia: Apache 2.0 + Commons Clause](https://img.shields.io/badge/licencia-Apache--2.0%20%2B%20Commons%20Clause-blue)](LICENSE)
 
-Un libro de cambios de tu código, en el orden en que se hicieron y con el
-porqué de cada uno. Claude Code registra cada cambio mientras trabaja —
-el método o la función que tocó, en qué archivos, el antes y el después, y la
-razón— y tú lo revisas después uno a uno, marcando lo que ya has verificado.
+**Git guarda el código. Los transcripts guardan la conversación. Code Timeline
+guarda la decisión vinculada al cambio.**
+
+Claude Code o Codex registran el porqué mientras todavía lo tienen en contexto;
+Git aporta el antes/después exacto y tú revisas después solo lo pendiente.
 
 También puede **proponer** cambios que no ha hecho: aparecen aparte, y tú los
 aceptas o los descartas. Lo hecho y lo sugerido nunca se mezclan.
@@ -25,6 +26,22 @@ decidir, aceptadas por escribir, cambios por revisar y pruebas en rojo. El
 libro completo vive en la pestaña **Historial**, y las propuestas descartadas
 en la suya. Imprimir saca las tres, esté abierta la que esté: una pestaña es
 un estado de pantalla, no del documento.
+
+## Pruébalo en 60 segundos
+
+Desde cualquier carpeta, instala el MCP en Claude Code y Codex con un comando:
+
+```bash
+npx github:FlEtsv/code-timeline instalar --agente ambos
+```
+
+Reinicia el agente y dile: **«vincula este proyecto y registra los cambios que
+hagas»**. Después abre la revisión con: **«abre el timeline»**.
+
+Para que el historial viaje con un repositorio de equipo, vincúlalo con
+`storageMode: "versioned"` o usa `code-timeline link ... --versionado`. Se
+espeja en `.code-timeline/history.json`; revisa su contenido antes de
+commitearlo porque contiene fragmentos y explicaciones del código.
 
 ## Cero coste en reposo. Menos del 1% al registrar. Y ahorra contexto después.
 

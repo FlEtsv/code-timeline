@@ -1,7 +1,7 @@
 {
   "name": "code-timeline",
-  "version": "1.0.0",
-  "description": "Libro de cambios de código verificable: servidor MCP + web local donde Claude registra cada cambio con su antes/después y su porqué",
+  "version": "1.1.0",
+  "description": "Historial verificable de decisiones de código para Claude Code y Codex mediante MCP",
   "type": "module",
   "license": "SEE LICENSE IN LICENSE",
   "author": "FlEtsv",
@@ -26,6 +26,8 @@
     "code-timeline": "bin/cli.mjs"
   },
   "files": [
+    "AGENTS.md",
+    "PILOTOS.md",
     "bin",
     "lib",
     "examples",
@@ -43,7 +45,8 @@
     "demo": "node scripts/seed-demo.mjs",
     "mcp": "node server.mjs",
     "test": "node --test",
-    "coste": "node scripts/medir-coste.mjs"
+    "coste": "node scripts/medir-coste.mjs",
+    "prepack": "npm test"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",

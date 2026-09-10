@@ -10,6 +10,7 @@ import { renderMarkdown } from '../lib/markdown.mjs';
 import { startServer } from '../lib/httpserver.mjs';
 import { DATA_DIR, DATA_DIR_REASON } from '../lib/datadir.mjs';
 import { webStatus } from '../lib/webproc.mjs';
+import { instalar } from '../lib/installer.mjs';
 import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -96,6 +97,15 @@ function restosDelAlmacen(dir) {
 }
 
 switch (cmd) {
+  case 'instalar': {
+    const r = instalar({ agente: flag('agente', rest) || 'ambos' });
+    for (const nombre of r.instalados) console.log(`✔ ${nombre}: code-timeline instalado`);
+    for (const error of r.errores) console.error(`✘ ${error}`);
+    console.log(`Servidor: ${r.server}`);
+    console.log('Reinicia los agentes para cargar las herramientas.');
+    if (r.errores.length) process.exitCode = 1;
+    break;
+  }
   case 'projects': {
     printProjects(listProjects());
     break;
@@ -109,7 +119,10 @@ switch (cmd) {
       console.error('Uso: code-timeline link --name "Nombre" --path "/ruta/al/repo" [--remote "git@..."]');
       process.exit(1);
     }
-    const p = createProject({ name, repoPath: path, githubRemote: remote });
+    const p = createProject({
+      name, repoPath: path, githubRemote: remote,
+      storageMode: rest.includes('--versionado') ? 'versioned' : 'private',
+    });
     console.log(`Vinculado: ${p.id}`);
     break;
   }
@@ -423,11 +436,14 @@ switch (cmd) {
     console.log(`code-timeline — historial visual de cambios de código
 
 Comandos:
+  instalar [--agente ambos|claude|codex] instala el MCP en uno o ambos agentes
   serve [--port N] [--host H] [--open]  levanta la web en localhost (viva, con notas)
                                         --host por defecto 127.0.0.1: solo tu máquina.
                                         Otro valor la abre a la red local
   projects                              lista proyectos vinculados
-  link --name N --path P [--remote R]   vincula un proyecto nuevo
+  link --name N --path P [--remote R] [--versionado]
+                                        vincula un proyecto; --versionado guarda una
+                                        copia commiteable en .code-timeline/history.json
   changes <projectId> [--limit N]       lista los cambios registrados
   proposals <projectId> [--accepted|--rejected]
                                         propuestas pendientes, aceptadas sin aplicar, o descartadas
