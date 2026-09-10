@@ -4,3 +4,7 @@ node_modules/
 # fragmentos literales del código del proyecto vinculado: en un repo público
 # eso no puede viajar. data/ se queda en tu máquina.
 data/
+
+# dise�o: la fuente .dc.html se versiona; el canvas sembrado es un artefacto
+design/**/cockpit-de-ramas.html
+design/**/*.seeded.html

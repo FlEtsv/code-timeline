@@ -1,0 +1,238 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:oklch(98.7% 0.004 85);--surface:oklch(100% 0 0);--surface-2:oklch(96.5% 0.009 85);
+      --border:oklch(91.5% 0.010 85);--ink:oklch(29% 0.018 80);--ink-dim:oklch(53% 0.018 80);
+      --ink-faint:oklch(72% 0.014 80);--accent:oklch(68% 0.135 78);--accent-ink:oklch(45% 0.115 78);
+      --accent-soft:oklch(68% 0.135 78 / 0.10);--before:oklch(56% 0.16 32);--before-line:oklch(75% 0.12 32);
+      --before-hatch:oklch(56% 0.16 32 / 0.06);--after:oklch(58% 0.105 155);--after-line:oklch(75% 0.10 155);
+      --shadow:0 1px 2px oklch(45% 0.02 80 / 0.05),0 10px 24px -14px oklch(45% 0.02 80 / 0.12);
+      --propose:oklch(52% 0.13 265);--propose-line:oklch(66% 0.12 265);--propose-soft:oklch(60% 0.13 265 / 0.09);
+    }
+    *{box-sizing:border-box;}
+    body{margin:0;width:1440px;min-height:1400px;background:var(--bg);color:var(--ink);
+      font-family:'Public Sans',system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased;}
+    a{color:var(--accent-ink);text-decoration:none;}a:hover{color:var(--accent);}
+    .page{max-width:1344px;margin:0 auto;padding:48px 0 80px;}
+    .mono{font-family:'JetBrains Mono',monospace;}
+    h1{font-family:'Source Serif 4',serif;font-weight:600;font-size:30px;margin:0 0 4px;}
+    .hero-sub{color:var(--ink-dim);font-size:14px;max-width:70ch;margin:0 0 26px;}
+
+    /* --- fila de recuento (existente) --- */
+    .tally-row{display:flex;border-top:1.5px solid var(--ink);border-bottom:1px solid var(--border);}
+    .tally{flex:1;padding:14px 20px;}
+    .tally+.tally{border-left:1px solid var(--border);}
+    .tally .n{font-family:'JetBrains Mono',monospace;font-size:27px;font-weight:600;font-variant-numeric:tabular-nums;display:block;}
+    .tally.progress .n{color:var(--accent-ink);}
+    .tally .l{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink-dim);margin-top:2px;display:block;}
+    .bar{height:3px;background:var(--border);margin-top:9px;border-radius:2px;overflow:hidden;}
+    .bar-fill{height:100%;background:var(--accent);}
+
+    /* --- NUEVO: franja de ramas --- */
+    .branchstrip{position:sticky;top:0;z-index:4;background:var(--bg);
+      border-bottom:2px solid var(--ink);padding:16px 0 0;}
+    .branchstrip-head{display:flex;align-items:baseline;gap:10px;margin-bottom:11px;}
+    .branchstrip-head .t{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);}
+    .branchstrip-head .fetch{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;
+      border:1px solid var(--border);border-radius:2px;padding:4px 10px;color:var(--ink-dim);}
+    .branches{display:flex;gap:10px;overflow-x:auto;padding-bottom:14px;}
+    .bcard{flex:0 0 auto;min-width:210px;border:1px solid var(--border);border-radius:3px;
+      background:var(--surface);padding:11px 13px 12px;cursor:pointer;}
+    .bcard.active{border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent);}
+    .bcard.remote{opacity:.72;border-style:dashed;}
+    .bcard .bn{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--ink);
+      display:flex;align-items:center;gap:6px;}
+    .bcard.active .bn{color:var(--accent-ink);font-weight:600;}
+    .bcard .brow{display:flex;align-items:center;gap:12px;margin-top:8px;
+      font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);}
+    .ab{font-variant-numeric:tabular-nums;}
+    .ab .up{color:var(--after);}.ab .dn{color:var(--ink-faint);}
+    .bcard .merged{color:var(--after);}
+    .gap{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:10.5px;
+      border:1px solid var(--before-line);color:var(--before);background:var(--before-hatch);
+      border-radius:2px;padding:2px 7px;}
+    .gap.zero{border-color:var(--border);color:var(--ink-faint);background:transparent;}
+    .dot-here{width:5px;height:5px;border-radius:50%;background:var(--accent);}
+
+    /* --- NUEVO: barra de filtro activo --- */
+    .filterbar{display:flex;align-items:center;gap:12px;margin:16px 0 4px;padding:9px 13px;
+      background:var(--accent-soft);border:1px solid var(--accent);border-radius:3px;
+      font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--accent-ink);}
+    .filterbar .b{font-weight:600;}
+    .filterbar .sep{color:var(--accent);opacity:.5;}
+    .filterbar .clear{margin-left:auto;border:1px solid var(--accent);border-radius:2px;
+      padding:3px 9px;color:var(--accent-ink);cursor:pointer;}
+    .filterbar .clear:hover{background:var(--accent);color:var(--surface);}
+
+    /* --- timeline (existente) --- */
+    .timeline{position:relative;margin-top:6px;}
+    .folio{padding:30px 0 9px;}
+    .folio-rule{display:flex;align-items:baseline;gap:10px;border-bottom:2px solid var(--ink);padding-bottom:9px;}
+    .folio-num{font-family:'Source Serif 4',serif;font-weight:600;font-size:22px;}
+    .folio-rest{font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);}
+    .folio-count{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);}
+    .entry{position:relative;padding-left:40px;margin-top:26px;}
+    .entry::before{content:"";position:absolute;left:14px;top:5px;bottom:-26px;width:2px;
+      background-image:repeating-linear-gradient(to bottom,var(--border) 0 1px,transparent 1px 7px);}
+    .entry:last-child::before{display:none;}
+    .entry-marker{position:absolute;left:8px;top:7px;width:14px;height:14px;border-radius:50%;
+      background:var(--surface);border:2px solid var(--accent);display:flex;align-items:center;justify-content:center;}
+    .entry.reviewed .entry-marker{background:var(--accent);}
+    .entry-marker svg{width:7px;height:7px;stroke:var(--surface);}
+    .card{position:relative;background:var(--surface);border:1px solid var(--border);border-radius:3px;
+      box-shadow:var(--shadow);padding:21px 23px 23px;overflow:hidden;}
+    .entry.reviewed .card{box-shadow:none;opacity:.72;}
+    .card-head{display:flex;align-items:center;gap:11px;flex-wrap:wrap;}
+    .chip{font-family:'JetBrains Mono',monospace;font-size:11px;padding:3px 9px;border:1px solid var(--border);
+      border-radius:2px;color:var(--ink-dim);background:var(--surface-2);}
+    .chip-by{border-style:dashed;}
+    .chip-branch{border-color:var(--accent);color:var(--accent-ink);}
+    .state{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:.12em;
+      text-transform:uppercase;padding:3px 8px;border-radius:2px;}
+    .state-merged{color:var(--after);border:1px solid var(--after-line);background:transparent;}
+    .state-orphan{color:var(--before);border:1px solid var(--before-line);background:var(--before-hatch);}
+    .check{margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;
+      font-size:11.5px;color:var(--ink-dim);}
+    .check .ring{width:15px;height:15px;border-radius:50%;border:1.5px solid var(--border);
+      display:flex;align-items:center;justify-content:center;}
+    .entry.reviewed .check .ring{background:var(--accent);border-color:var(--accent);}
+    .entry.reviewed .check .ring svg{stroke:var(--surface);}
+    .card-title{font-family:'Source Serif 4',serif;font-weight:600;font-size:19.5px;margin:13px 0 6px;}
+    .card-body{font-size:13.5px;color:var(--ink-dim);max-width:74ch;}
+    .files{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 2px;}
+    .file{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-dim);
+      border:1px solid var(--border);border-radius:2px;padding:3px 8px;background:var(--surface-2);}
+    .dim{opacity:.4;pointer-events:none;}
+    .note{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--ink-faint);margin:22px 0 0;}
+  </style>
+</helmet>
+
+<div class="page">
+  <h1>auth-service</h1>
+  <p class="hero-sub">El historial, leído por rama. Pulsa una rama para ver solo sus decisiones y lo que aún no está registrado.</p>
+
+  <div class="branchstrip">
+    <div class="branchstrip-head">
+      <span class="t">Ramas · principal <strong>main</strong></span>
+      <span class="fetch">↓ traer del remoto</span>
+    </div>
+    <div class="branches">
+      <div class="bcard active">
+        <div class="bn"><span class="dot-here"></span>feat/oauth</div>
+        <div class="brow">
+          <span class="ab"><span class="up">▲6</span> <span class="dn">▼0</span></span>
+          <span>3 entradas</span>
+          <span class="gap">2 sin registrar</span>
+        </div>
+      </div>
+      <div class="bcard">
+        <div class="bn">feat/perfil</div>
+        <div class="brow">
+          <span class="ab"><span class="up">▲2</span> <span class="dn">▼4</span></span>
+          <span>1 entrada</span>
+          <span class="gap zero">al día</span>
+        </div>
+      </div>
+      <div class="bcard">
+        <div class="bn">fix/sesiones</div>
+        <div class="brow">
+          <span class="ab"><span class="up">▲1</span> <span class="dn">▼0</span></span>
+          <span>0 entradas</span>
+          <span class="gap">1 sin registrar</span>
+        </div>
+      </div>
+      <div class="bcard remote">
+        <div class="bn">origin/feat/export</div>
+        <div class="brow">
+          <span class="merged">fusionada</span>
+          <span>2 entradas</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="filterbar">
+    <span>Rama</span><span class="b">feat/oauth</span>
+    <span class="sep">·</span><span>3 entradas</span>
+    <span class="sep">·</span><span>2 commits sin registrar</span>
+    <span class="clear">✕ ver todo</span>
+  </div>
+
+  <div class="timeline">
+    <div class="folio">
+      <div class="folio-rule">
+        <span class="folio-num">11</span>
+        <span class="folio-rest">mar · feat/oauth</span>
+        <span class="folio-count">3 en esta rama</span>
+      </div>
+    </div>
+
+    <article class="entry reviewed">
+      <div class="entry-marker"><svg viewBox="0 0 8 8" fill="none" stroke-width="2"><path d="M1 4l2 2 4-5"/></svg></div>
+      <div class="card">
+        <div class="card-head">
+          <span class="chip">función · intercambiarCodigo()</span>
+          <span class="chip chip-by">Ana Pérez &lt;ana@equipo.dev&gt;</span>
+          <span class="chip chip-branch">feat/oauth</span>
+          <span class="check"><span class="ring"><svg viewBox="0 0 8 8" fill="none" stroke-width="2"><path d="M1 4l2 2 4-5"/></svg></span>revisado</span>
+        </div>
+        <h2 class="card-title">Canjear el code de Google por tokens en el callback</h2>
+        <p class="card-body">El endpoint recibía el <code>code</code> pero no lo cambiaba por el par de tokens: sin el <code>access_token</code> no hay forma de leer el perfil, así que el alta se quedaba a medias sin dar error.</p>
+        <div class="files"><span class="file">src/auth/oauth.mjs:41</span><span class="file">src/auth/session.mjs:12</span></div>
+      </div>
+    </article>
+
+    <article class="entry">
+      <div class="entry-marker"></div>
+      <div class="card">
+        <div class="card-head">
+          <span class="chip">función · leerPerfil()</span>
+          <span class="chip chip-by">C. Ruiz &lt;ce@equipo.dev&gt;</span>
+          <span class="chip chip-branch">feat/oauth</span>
+          <span class="check"><span class="ring"></span>pendiente</span>
+        </div>
+        <h2 class="card-title">Guardar nombre y avatar del perfil de Google</h2>
+        <p class="card-body">Continúa el cambio anterior: con el <code>access_token</code> ya en mano, se pide <code>userinfo</code> y se persisten <code>name</code> y <code>picture</code> en la fila del usuario.</p>
+        <div class="files"><span class="file">src/auth/oauth.mjs:63</span><span class="file">src/db/users.mjs:88</span></div>
+      </div>
+    </article>
+
+    <article class="entry">
+      <div class="entry-marker"></div>
+      <div class="card">
+        <div class="card-head">
+          <span class="chip">config · rutas</span>
+          <span class="chip chip-by">Ana Pérez &lt;ana@equipo.dev&gt;</span>
+          <span class="chip chip-branch">feat/oauth</span>
+          <span class="state state-merged">fusionada · a3f9c2</span>
+          <span class="check"><span class="ring"></span>pendiente</span>
+        </div>
+        <h2 class="card-title">Ruta /auth/google/callback y su base URL por entorno</h2>
+        <p class="card-body">La rama en la que se registró ya se fusionó a <code>main</code>; el trabajo entró en el commit <code>a3f9c2</code>. La entrada sigue viva en el historial, solo cambia dónde vive su código.</p>
+        <div class="files"><span class="file">src/auth/routes.mjs:8</span></div>
+      </div>
+    </article>
+
+    <p class="note">— 2 commits de feat/oauth sin una entrada equivalente: <span class="mono">src/auth/errors.mjs</span>, <span class="mono">test/oauth.test.mjs</span>. <a>ver informe</a></p>
+
+    <div class="folio dim" style="margin-top:34px;">
+      <div class="folio-rule">
+        <span class="folio-num">10</span>
+        <span class="folio-rest">mar · main</span>
+        <span class="folio-count">oculto por el filtro</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
