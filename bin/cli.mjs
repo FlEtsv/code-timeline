@@ -2,7 +2,7 @@
 import {
   listProjects, getProject, createProject, listChanges, listByStatus,
   decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
-  findProjectByRepo, recordQaRun, listQaRuns, stampCommits, syncReport,
+  findProjectByRepo, recordQaRun, listQaRuns, stampCommits, syncReport, branchReport,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from '../lib/consejo.mjs';
@@ -230,9 +230,32 @@ switch (cmd) {
   case 'sync': {
     try {
       const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : flag('repo', rest) || process.cwd();
-      const report = syncReport(id);
-      console.log(report.message);
+      const branch = flag('branch', rest) || undefined;
+      const report = syncReport(id, { branch });
+      console.log(report.message + (branch ? ` en ${branch}` : ''));
       for (const gap of report.gaps) console.log(`  ${JSON.stringify(gap.file)}: ${gap.reason}`);
+    } catch (err) {
+      console.error(err.message);
+      process.exitCode = 1;
+    }
+    break;
+  }
+
+  case 'branches': {
+    try {
+      const id = rest[0] && !rest[0].startsWith('--') ? rest[0] : flag('repo', rest) || process.cwd();
+      const rep = branchReport(id, { fetch: rest.includes('--fetch') });
+      console.log(`rama principal: ${rep.principal || '(ninguna)'}`);
+      console.log('');
+      const fila = (r) => {
+        const marca = r.nombre === rep.ramaActual ? '* ' : '  ';
+        const pos = r.remota ? '(remota)'
+          : `▲${r.adelante ?? '?'} ▼${r.atras ?? '?'}${r.fusionada ? ' fusionada' : ''}`;
+        const huecos = r.sinRegistrar == null ? '' : `${r.sinRegistrar} sin registrar`;
+        return `${marca}${r.nombre.padEnd(34)} ${pos.padEnd(22)} ${String(r.entradas).padStart(3)} entr  ${huecos}`;
+      };
+      for (const r of rep.ramas) console.log(fila(r));
+      if (!rep.ramas.length) console.log('(no hay más ramas que la principal)');
     } catch (err) {
       console.error(err.message);
       process.exitCode = 1;
@@ -567,7 +590,11 @@ switch (cmd) {
     console.log(`code-timeline — historial visual de cambios de código
 
 Comandos:
-  sync [<projectId>] [--repo ruta]      lista cambios sin registrar (solo lectura)
+  sync [<projectId>] [--branch B]       lista cambios sin registrar (solo lectura).
+                                        --branch acota a los commits de esa rama
+  branches [<projectId>] [--fetch]      las ramas del repo: adelante/atrás de la
+                                        principal, entradas del historial y commits
+                                        sin registrar por rama. --fetch trae antes
   init [--path P] [--name N]            registra el MCP en scope user, vincula el repo
                                         (el de --path, o el directorio actual) y deja un
                                         bloque de uso en su CLAUDE.md. Idempotente: cada

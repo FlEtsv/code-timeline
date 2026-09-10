@@ -8,7 +8,7 @@ import {
   listProjects, getProject, createProject,
   listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied, setTest,
   exportProject, importProject, timelineHtmlPath, stampCommits, resumirCambio, getChange,
-  resolveProject, syncReport,
+  resolveProject, syncReport, branchReport,
 } from './lib/store.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from './lib/consejo.mjs';
 import { renderTimelineHtml } from './lib/render.mjs';
@@ -24,6 +24,19 @@ server.registerTool('sync_report', {
   annotations: { readOnlyHint: true },
 }, async ({ projectId }) => {
   const report = syncReport(projectId);
+  return { ...text(report), structuredContent: report };
+});
+
+server.registerTool('branch_report', {
+  title: 'Las ramas del proyecto',
+  description: 'Para cada rama: adelante/atrás de la principal, entradas del historial que la nombran y commits suyos sin registrar. Solo lectura. fetch trae del remoto primero (mueve refs).',
+  inputSchema: {
+    projectId: z.string().describe('Id del proyecto o ruta del repo'),
+    fetch: z.boolean().optional().describe('Hacer git fetch antes (opt-in)'),
+  },
+  annotations: { readOnlyHint: true },
+}, async ({ projectId, fetch }) => {
+  const report = branchReport(projectId, { fetch: !!fetch });
   return { ...text(report), structuredContent: report };
 });
 
@@ -124,6 +137,7 @@ server.registerTool(
       explanation: z.string().describe('Qué cambió y POR QUÉ — el motivo real, no una paráfrasis del diff'),
       commit: z.string().optional().describe('Hash corto del commit, si ya existe. Se usa para leer el archivo TAL COMO ESTABA en ese commit (git show) al abrir el mini-editor'),
       date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
+      by: z.string().optional().describe('Quién registra la entrada. Por defecto, la identidad de git del repo (user.name <user.email>). Útil cuando el timeline es de un equipo'),
       relationType: z.enum(['continuation', 'jump', 'start']).optional(),
       relationNote: z.string().optional().describe('Obligatorio si relationType="jump": explica qué distingue este cambio del anterior'),
       test: z.object({
@@ -251,6 +265,7 @@ server.registerTool(
       title: z.string().describe('Resumen de una línea de qué propones'),
       explanation: z.string().describe('Qué propones y POR QUÉ: qué problema resuelve o qué mejora, y qué se pierde si no se hace'),
       date: z.string().optional().describe('ISO 8601; por defecto, ahora'),
+      by: z.string().optional().describe('Quién propone. Por defecto, la identidad de git del repo'),
     },
   },
   async (args) => {

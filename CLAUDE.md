@@ -39,7 +39,13 @@ en cualquier proyecto, sin tener que abrir este repo. Herramientas:
   en git —lo editaste fuera del repo— o si quieres enseñar un fragmento
   distinto del que saldría del diff. `lineStart`/`lineEnd` son opcionales y
   sirven para acotar cuando en el mismo archivo hay varios cambios sueltos y
-  solo uno es de esta entrada.
+  solo uno es de esta entrada. Se anota solo **quién** registra (`by`, de tu
+  `git config` — pásalo solo si no eres tú, p.ej. un bot) y **en qué rama**.
+- `branch_report(projectId, { fetch })` — las ramas del repo: adelante/atrás de
+  la principal, entradas del historial por rama y commits sin registrar por
+  rama. Para revisar por rama en vez de en un log plano. `fetch: true` trae del
+  remoto antes (mueve refs; por defecto no). `sync_report` acepta `branch` para
+  acotar los huecos a una rama.
 - `render_timeline(projectId)` — regenera el HTML estático (para exportar o
   como respaldo legible en git). La vista viva es el servidor, no esto.
 - `list_changes` — el historial SIN código: título, porqué recortado, archivos,
@@ -177,9 +183,11 @@ archivo ya no existe ahí (renombrado/borrado), cae a
   un archivo, usado por la pantalla completa al cambiar de pestaña).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
-- `bin/cli.mjs` — CLI para el usuario: `init`, `serve`, `projects`, `link`,
-  `changes`, `proposals`, `decide`, `applied`, `test`, `qa`, `export`,
-  `import`, `render`, `show`, `doctor`. `init` es el arranque en un proyecto
+- `bin/cli.mjs` — CLI para el usuario: `init`, `branches`, `sync`, `serve`,
+  `projects`, `link`, `changes`, `proposals`, `decide`, `applied`, `test`,
+  `qa`, `export`, `import`, `render`, `show`, `doctor`. `branches` lista las
+  ramas del repo con entradas y huecos por rama; `sync --branch B` acota el
+  informe de huecos a una rama. `init` es el arranque en un proyecto
   nuevo: registra el MCP en scope user, vincula el repo (el de `--path`, o el
   directorio actual) y deja un bloque delimitado de uso en su `CLAUDE.md`.
   Idempotente — cada uno de los tres pasos comprueba primero si ya está hecho

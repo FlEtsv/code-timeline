@@ -10,7 +10,7 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
 
 ### El producto
 
-- Servidor **MCP** (stdio) con 21 herramientas para que un agente registre
+- Servidor **MCP** (stdio) con 22 herramientas para que un agente registre
   cada cambio con su antes/después y su porqué, proponga lo que aún no ha
   escrito, y anote cómo se comprueba que funciona.
 - **Web local** para leer el historial en orden, marcar revisado y dejar
@@ -104,6 +104,16 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   seguimiento, y lista un hueco por archivo con su motivo. Solo informa, no
   escribe entradas. La herramienta MCP `sync_report` devuelve el mismo
   informe ya estructurado, con `projectId` (id o ruta del repo).
+  `--branch B` acota el informe a los commits de esa rama (`principal..B`).
+- **El cockpit de ramas.** Cada entrada guarda ahora `by` (quién la registró,
+  de tu `git config` si no lo pasas), `branch` y el `baseSha` del momento, y un
+  `updatedAt`. Con eso, `code-timeline branches` lista todas las ramas del repo
+  —locales y de seguimiento— con su posición respecto a la principal, si están
+  fusionadas, cuántas entradas del historial las nombran y cuántos de sus
+  commits no están registrados; `--fetch` trae del remoto primero. Una entrada
+  sabe además si su rama sigue viva, ya se fusionó (y por qué commit) o quedó
+  huérfana. La herramienta MCP `branch_report` devuelve lo mismo estructurado.
+  Todo de solo lectura salvo `--fetch`.
 
 ### Corregido antes del lanzamiento
 

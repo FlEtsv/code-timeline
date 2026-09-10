@@ -430,9 +430,37 @@ Añadir entradas es cosa del agente a propósito: el valor de cada una está en 
 explicación, y esa hay que redactarla con el cambio fresco, no deducirla luego
 de un diff.
 
+## El cockpit de ramas
+
+Cada entrada guarda ahora **quién la registró** (`by`, tomado de tu `git config`
+si no lo pasas) y **en qué rama** se hizo (`branch` + el `baseSha` de ese
+momento). Con eso, code-timeline deja de ser un log plano y se puede leer por
+rama:
+
+```bash
+code-timeline branches [<projectId>] [--fetch]
+```
+
+Lista todas las ramas del repo —locales y de seguimiento del remoto— con lo que
+importa para revisar: cuánto van por delante y por detrás de la principal, si ya
+están fusionadas, cuántas entradas del historial las nombran, y cuántos de sus
+commits **no** están registrados. `--fetch` trae del remoto primero (es lo único
+de todo esto que mueve refs, así que solo si lo pides).
+
+```bash
+code-timeline sync --branch feat/oauth
+```
+
+acota el informe de huecos a los commits de esa rama (`principal..rama`) en vez
+de a HEAD. La herramienta MCP `branch_report` devuelve lo mismo estructurado.
+
+Una entrada sabe además si su rama sigue **viva**, ya se **fusionó** (y por qué
+commit entró en la principal) o quedó **huérfana** (se revirtió o se reescribió
+sin registrarlo).
+
 ## El CLI
 
-`code-timeline sync [<projectId>] [--repo ruta]` informa de `N cambios sin registrar`,
+`code-timeline sync [<projectId>] [--repo ruta] [--branch B]` informa de `N cambios sin registrar`,
 con archivo y motivo, sin escribir entradas. Por defecto usa el repositorio actual.
 Compara los commits de la rama actual desde la fecha de la última entrada aplicada
 (todo el historial si está vacío), el diff local y los archivos sin seguimiento.
@@ -445,6 +473,8 @@ donde cada hueco tiene `file` y `reason`.
 ```
 code-timeline init [--path P] [--name N]  registra el MCP, vincula el repo y deja el
                                           bloque de uso en su CLAUDE.md. Idempotente
+code-timeline branches [<projectId>] [--fetch]  las ramas del repo, con entradas y
+                                          commits sin registrar por rama
 code-timeline serve [--port N] [--host H] [--open]   levanta la web (viva, con notas)
 code-timeline projects                    lista los proyectos vinculados
 code-timeline link --name N --path P [--remote R]   vincula un proyecto
@@ -487,6 +517,7 @@ code-timeline doctor                      diagnóstico: dónde están los datos 
 | `stamp_commits` | Apunta en cada entrada el commit que la recogió |
 | `pr_body` | Redacta el cuerpo de un PR desde las entradas de la rama |
 | `sync_report` | Informe de cambios sin registrar (commits, diff local y archivos sin seguimiento). Solo lectura |
+| `branch_report` | Las ramas del repo: adelante/atrás de la principal, entradas del historial y commits sin registrar por rama. Solo lectura |
 | `start_web` / `stop_web` / `web_status` | Controla el servidor web |
 
 La frontera entre `add_change` y `propose_change` es la que sostiene todo lo
@@ -554,7 +585,7 @@ repositorio privado tuyo.
 npm test
 ```
 
-157 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
+168 pruebas con el runner que trae Node (`node:test`), sin dependencias. Cubren
 lo que puede romperse sin hacer ruido: el tokenizador del resaltado (lenguajes
 desconocidos, cadenas y comentarios sin cerrar, escapado de HTML), la máquina
 de estados de las propuestas con sus guardarraíles, el ciclo de export e
