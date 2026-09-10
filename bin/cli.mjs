@@ -3,6 +3,7 @@ import {
   listProjects, getProject, createProject, listChanges, listByStatus,
   decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
   findProjectByRepo, recordQaRun, listQaRuns, stampCommits,
+  recordRecall, recallStats,
 } from '../lib/store.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from '../lib/consejo.mjs';
@@ -11,6 +12,8 @@ import { startServer } from '../lib/httpserver.mjs';
 import { DATA_DIR, DATA_DIR_REASON } from '../lib/datadir.mjs';
 import { webStatus } from '../lib/webproc.mjs';
 import { instalar } from '../lib/installer.mjs';
+import { setup } from '../lib/setup.mjs';
+import { cobertura } from '../lib/coverage.mjs';
 import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -97,6 +100,23 @@ function restosDelAlmacen(dir) {
 }
 
 switch (cmd) {
+  case 'setup': {
+    const repo = resolve(flag('repo', rest) || process.cwd());
+    const r = setup({
+      repoPath: repo,
+      name: flag('name', rest),
+      agente: flag('agente', rest) || 'ambos',
+      versionado: rest.includes('--versionado'),
+    });
+    for (const nombre of r.instalados) console.log(`✔ ${nombre}: MCP instalado`);
+    for (const path of r.archivos) console.log(`✔ configuración: ${path}`);
+    for (const error of r.errores) console.error(`✘ ${error}`);
+    console.log(`✔ proyecto: ${r.project.id} (${r.project.storageMode})`);
+    console.log('Reinicia Claude/Codex una vez; desde entonces el repositorio comprueba su cobertura al terminar.');
+    if (r.errores.length) process.exitCode = 1;
+    break;
+  }
+
   case 'instalar': {
     const r = instalar({ agente: flag('agente', rest) || 'ambos' });
     for (const nombre of r.instalados) console.log(`✔ ${nombre}: code-timeline instalado`);
@@ -108,6 +128,38 @@ switch (cmd) {
   }
   case 'projects': {
     printProjects(listProjects());
+    break;
+  }
+
+  case 'guard': {
+    const repo = resolve(flag('repo', rest) || process.cwd());
+    const proyecto = findProjectByRepo(repo);
+    let hookInput = {};
+    if (rest.includes('--hook')) {
+      try { hookInput = JSON.parse(readFileSync(0, 'utf8') || '{}'); } catch { hookInput = {}; }
+    }
+    if (hookInput.stop_hook_active) break;
+    if (!proyecto) {
+      if (!rest.includes('--hook')) console.error(`Code Timeline: ${repo} no está vinculado.`);
+      process.exitCode = rest.includes('--hook') ? 0 : 1;
+      break;
+    }
+    let cambios = listChanges(proyecto.id);
+    const gitActual = aconsejar(proyecto, cambios).git;
+    const sellos = sellosPendientes(proyecto, cambios, gitActual);
+    if (sellos.length) {
+      stampCommits(proyecto.id, sellos);
+      cambios = listChanges(proyecto.id);
+    }
+    const estado = cobertura(proyecto, cambios);
+    if (estado.completa) {
+      if (!rest.includes('--hook')) console.log('Historial completo: todos los archivos modificados tienen entrada.');
+      break;
+    }
+    const detalle = `Historial incompleto. Registra estos archivos con add_change antes de terminar: ${estado.archivosSinEntrada.join(', ')}`;
+    if (flag('hook', rest) === 'claude') console.log(JSON.stringify({ decision: 'block', reason: detalle }));
+    else console.error(detalle);
+    process.exitCode = flag('hook', rest) === 'claude' ? 0 : 2;
     break;
   }
 
@@ -219,6 +271,18 @@ switch (cmd) {
       detail: flag('detalle', rest),
     });
     console.log(`${proyecto.id}: QA ${run.result}${run.environment ? ' en ' + run.environment : ''}`);
+    break;
+  }
+
+  case 'recall': {
+    const [id, changeId] = rest;
+    if (!id) { console.error('Uso: code-timeline recall <projectId> [<changeId> --evito --minutos N] [--stats]'); process.exit(1); }
+    if (rest.includes('--stats')) { console.log(JSON.stringify(recallStats(id), null, 2)); break; }
+    if (!changeId) { console.error('Falta changeId.'); process.exit(1); }
+    const r = recordRecall(id, changeId, {
+      avoided: rest.includes('--evito'), minutes: flag('minutos', rest), note: flag('note', rest),
+    });
+    console.log(`Recuperación registrada: ${r.entryAgeHours} h de antigüedad${r.avoided ? ` · ${r.minutes} min ahorrados` : ''}`);
     break;
   }
 
@@ -436,7 +500,12 @@ switch (cmd) {
     console.log(`code-timeline — historial visual de cambios de código
 
 Comandos:
+  setup [--repo P] [--agente ambos|claude|codex] [--versionado]
+                                        instala, vincula e integra el repo en un paso
   instalar [--agente ambos|claude|codex] instala el MCP en uno o ambos agentes
+  guard [--repo P] [--hook claude]      falla si hay archivos cambiados sin entrada
+  recall <projectId> <changeId> [--evito] [--minutos N]
+                                        mide una consulta antigua; --stats resume el piloto
   serve [--port N] [--host H] [--open]  levanta la web en localhost (viva, con notas)
                                         --host por defecto 127.0.0.1: solo tu máquina.
                                         Otro valor la abre a la red local

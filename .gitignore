@@ -1,4 +1,5 @@
 node_modules/
+.claude/settings.local.json
 
 # El historial es de quien lo genera, no del repo. Cada entrada guarda
 # fragmentos literales del código del proyecto vinculado: en un repo público

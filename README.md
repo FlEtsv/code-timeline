@@ -29,19 +29,27 @@ un estado de pantalla, no del documento.
 
 ## Pruébalo en 60 segundos
 
-Desde cualquier carpeta, instala el MCP en Claude Code y Codex con un comando:
+Desde la raíz de un repositorio, instala el MCP, vincula el proyecto y deja la
+guardia de cobertura para Claude Code y las instrucciones persistentes para
+Claude y Codex con un comando:
 
 ```bash
-npx github:FlEtsv/code-timeline instalar --agente ambos
+npx github:FlEtsv/code-timeline setup --agente ambos
 ```
 
-Reinicia el agente y dile: **«vincula este proyecto y registra los cambios que
-hagas»**. Después abre la revisión con: **«abre el timeline»**.
+Reinicia los agentes una vez. A partir de ahí registran cada cambio y comprueban
+antes de terminar si algún archivo quedó sin entrada. Después abre la revisión
+con: **«abre el timeline»**.
 
 Para que el historial viaje con un repositorio de equipo, vincúlalo con
-`storageMode: "versioned"` o usa `code-timeline link ... --versionado`. Se
-espeja en `.code-timeline/history.json`; revisa su contenido antes de
-commitearlo porque contiene fragmentos y explicaciones del código.
+`storageMode: "versioned"` o añade `--versionado` al comando `setup`. Cada
+entrada vive en `.code-timeline/entries/<id>.json` y un índice pequeño conserva
+el orden, evitando que dos ramas reescriban un único historial monolítico.
+Revisa el contenido antes de commitearlo porque contiene fragmentos y
+explicaciones del código.
+
+El modo seguro por defecto es privado: no escribe el historial dentro del repo.
+`--versionado` es una decisión explícita.
 
 ## Cero coste en reposo. Menos del 1% al registrar. Y ahorra contexto después.
 
@@ -365,8 +373,11 @@ la rama actual, y avisan de lo que no debería fusionarse a ciegas —pruebas en
 rojo, cambios sin revisar—. Sirve igual para la descripción de un pull request
 que para el comentario de handoff al cerrar la jornada.
 
-Tampoco publica nada: devuelve el texto. Esta herramienta no habla con la API
-de GitHub ni guarda credenciales.
+En modo versionado, el workflow incluido publica ese resumen como comentario
+del PR y actualiza únicamente el comentario marcado de Code Timeline. En PR de
+fork se limita al resumen del job porque GitHub no concede permiso de escritura
+al token. La instalación local no guarda credenciales: Actions usa su token
+efímero.
 
 ### Exportar
 
@@ -533,6 +544,8 @@ de un diff.
 ## El CLI
 
 ```
+code-timeline setup [--repo P] [--agente ambos|claude|codex] [--versionado]
+                                             instala, vincula e integra el repo
 code-timeline serve [--port N] [--host H] [--open]   levanta la web (viva, con notas)
 code-timeline projects                    lista los proyectos vinculados
 code-timeline link --name N --path P [--remote R]   vincula un proyecto
@@ -548,6 +561,9 @@ code-timeline import <fichero.json> [--merge <projectId>] [--repo <ruta>]
 code-timeline consejo [<projectId>] [--repo ruta]    qué convendría hacer con git ahora
 code-timeline sellar --proyecto <id> [--simular]    apunta en cada entrada su commit
 code-timeline pr [<projectId>] [--out ruta]         cuerpo de PR desde las entradas de la rama
+code-timeline guard [--repo ruta]                   falla si hay cambios sin entrada
+code-timeline recall <projectId> <changeId> --evito --minutos N
+                                                    mide recuperación de contexto real
 code-timeline render <projectId>          exporta un timeline.html estático
 code-timeline show <projectId>            metadatos del proyecto (JSON)
 code-timeline doctor                      diagnóstico: dónde están los datos y por qué

@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 jobs:
   resumen:
@@ -14,9 +15,18 @@ jobs:
         with:
           fetch-depth: 0
       - uses: actions/setup-node@v4
-        if: ${{ hashFiles('.code-timeline/history.json') != '' }}
+        if: ${{ hashFiles('.code-timeline/index.json', '.code-timeline/history.json') != '' }}
         with:
           node-version: 18
       - name: Publicar resumen verificable del PR
-        if: ${{ hashFiles('.code-timeline/history.json') != '' }}
+        if: ${{ hashFiles('.code-timeline/index.json', '.code-timeline/history.json') != '' }}
+        env:
+          CT_PR_BODY: ${{ runner.temp }}/code-timeline-pr.md
         run: node scripts/pr-versionado.mjs
+      - name: Actualizar comentario de Code Timeline
+        if: ${{ hashFiles('.code-timeline/index.json', '.code-timeline/history.json') != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+          CT_PR_BODY: ${{ runner.temp }}/code-timeline-pr.md
+        run: node scripts/publicar-pr.mjs

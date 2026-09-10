@@ -38,12 +38,30 @@ test('el modo versionado espeja el historial dentro del repo', () => {
   const repo = mkdtempSync(join(tmpdir(), 'ct-versionado-'));
   const v = store.createProject({ name: 'Versionado', repoPath: repo, storageMode: 'versioned' });
   store.addChange(v.id, { title: 't', explanation: 'e', files: FILES });
-  const path = join(repo, '.code-timeline', 'history.json');
+  const path = join(repo, '.code-timeline', 'index.json');
   assert.ok(existsSync(path));
   const espejo = JSON.parse(readFileSync(path, 'utf8'));
-  assert.equal(espejo.format, 'code-timeline/versioned-v1');
-  assert.equal(espejo.changes.length, 1);
+  assert.equal(espejo.format, 'code-timeline/versioned-v2');
+  assert.equal(espejo.entries.length, 1);
+  assert.ok(existsSync(join(repo, '.code-timeline', espejo.entries[0].path)));
+  assert.equal(JSON.parse(readFileSync(join(repo, '.code-timeline', espejo.entries[0].path), 'utf8')).change.title, 't');
   rmSync(repo, { recursive: true, force: true });
+});
+
+test('cada archivo tiene identidad propia y la procedencia separa Git de la explicación', () => {
+  const c = store.addChange(p.id, { title: 't', explanation: 'e', files: FILES });
+  assert.match(c.files[0].fileId, /^[0-9a-f]{12}$/);
+  assert.equal(c.provenance.explanation, 'agent');
+  assert.equal(c.provenance.code, 'provided');
+  store.updateChange(p.id, c.id, { verified: true });
+  assert.equal(store.getChange(p.id, c.id).provenance.humanVerified, true);
+});
+
+test('una recuperación antigua se mide sin mezclarla con el historial', () => {
+  const c = store.addChange(p.id, { title: 't', explanation: 'e', files: FILES, date: '2026-01-01T00:00:00Z' });
+  store.recordRecall(p.id, c.id, { avoided: true, minutes: 12 });
+  assert.deepEqual(store.recallStats(p.id), { recoveries: 1, oldRecoveries: 1, avoided: 1, minutesSaved: 12 });
+  assert.equal(store.listChanges(p.id).length, 1);
 });
 
 test('title y explanation son obligatorios', () => {
@@ -194,7 +212,10 @@ test('sellar rellena el commit de las entradas que no lo tienen', () => {
   ]);
   assert.equal(r.sellados, 2);
   const guardados = store.listChanges(p.id);
-  assert.equal(guardados.find((c) => c.id === a.id).commit, 'abc1234');
+  const sellado = guardados.find((c) => c.id === a.id);
+  assert.equal(sellado.commit, 'abc1234');
+  assert.match(sellado.anchorId, /^[0-9a-f]{20}$/);
+  assert.match(sellado.files[0].anchorId, /^[0-9a-f]{20}$/);
   assert.equal(guardados.find((c) => c.id === b.id).commit, 'def5678');
 });
 
