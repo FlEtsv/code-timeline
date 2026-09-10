@@ -300,3 +300,55 @@ test('una lista de líneas vacía no deja una explicación fantasma', () => {
   });
   assert.equal(c.files[0].explicaciones, undefined);
 });
+
+// ── Buscar en el historial ──────────────────────────────────
+
+test('buscar encuentra por el porqué, no solo por el título', () => {
+  store.addChange(p.id, {
+    title: 'Ajuste menor en el arranque', explanation: 'El candado entre procesos caducaba antes de tiempo.', files: FILES,
+  });
+  store.addChange(p.id, { title: 'Otra cosa', explanation: 'Nada que ver.', files: FILES });
+
+  const r = store.buscar(p.id, 'candado');
+  assert.equal(r.length, 1);
+  assert.match(r[0].title, /arranque/);
+  // El extracto tiene que traer el trozo donde casa, no el principio a secas.
+  assert.match(r[0].porque, /candado/);
+});
+
+test('el título pesa más que el porqué, y el porqué más que la ruta', () => {
+  const porTitulo = store.addChange(p.id, { title: 'El candado', explanation: 'x', files: FILES });
+  const porPorque = store.addChange(p.id, { title: 'Otra', explanation: 'habla del candado aquí', files: FILES });
+  const r = store.buscar(p.id, 'candado');
+  assert.equal(r[0].id, porTitulo.id, 'quien lo lleva en el título va primero');
+  assert.ok(r.find((x) => x.id === porPorque.id), 'pero el otro también aparece');
+});
+
+test('buscar no devuelve el código: para eso está get_change', () => {
+  store.addChange(p.id, { title: 'Con candado', explanation: 'e', files: FILES });
+  const r = store.buscar(p.id, 'candado');
+  assert.deepEqual(r[0].files, ['src/a.js'], 'solo las rutas');
+  assert.equal(r[0].before, undefined);
+  assert.equal(r[0].after, undefined);
+});
+
+test('una búsqueda vacía o de palabras cortas no devuelve todo el historial', () => {
+  store.addChange(p.id, { title: 'algo', explanation: 'e', files: FILES });
+  assert.deepEqual(store.buscar(p.id, ''), []);
+  assert.deepEqual(store.buscar(p.id, '   '), []);
+  // "de" y "el" no son términos: si contaran, cualquier consulta traería todo.
+  assert.deepEqual(store.buscar(p.id, 'de el la'), []);
+});
+
+test('sin coincidencias devuelve una lista vacía, no lo más parecido', () => {
+  store.addChange(p.id, { title: 'algo', explanation: 'e', files: FILES });
+  assert.deepEqual(store.buscar(p.id, 'palabrainexistente'), []);
+});
+
+test('buscar respeta el límite pedido', () => {
+  for (let i = 0; i < 8; i++) {
+    store.addChange(p.id, { title: `Cambio con candado ${i}`, explanation: 'e', files: FILES });
+  }
+  assert.equal(store.buscar(p.id, 'candado').length, 5, 'cinco por defecto');
+  assert.equal(store.buscar(p.id, 'candado', { limit: 2 }).length, 2);
+});

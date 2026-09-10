@@ -480,6 +480,21 @@ test('una propuesta no puede cerrar la valla antes de tiempo', async () => {
     'el intento se queda dentro, que es donde no manda');
 });
 
+test('el lanzador de Codex es efímero y no relaja aprobaciones ni sandbox', async () => {
+  const { comandoAgente } = await import('../lib/acciones.mjs');
+  const c = comandoAgente({ prompt: 'aplica esto', herramientas: ['una'], agente: 'codex' });
+  assert.equal(c.binario, process.env.CODE_TIMELINE_CODEX || 'codex');
+  assert.deepEqual(c.args, [
+    'exec', '--ephemeral', '--color', 'never', 'aplica esto',
+  ]);
+  assert.doesNotMatch(c.args.join(' '), /approve|bypass|danger/);
+});
+
+test('un agente desconocido se rechaza antes de lanzar un proceso', async () => {
+  const { comandoAgente } = await import('../lib/acciones.mjs');
+  assert.throws(() => comandoAgente({ prompt: 'x', herramientas: [], agente: 'otro' }), /no admitido/);
+});
+
 test('dos llamadas nunca usan la misma marca', async () => {
   const { promptDeAplicar } = await import('../lib/acciones.mjs');
   const uno = (n) => promptDeAplicar({ name: 'P', repoPath: '/tmp' }, 'p', 'c',

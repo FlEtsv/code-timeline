@@ -7,7 +7,7 @@ import { resolve } from 'node:path';
 import {
   listProjects, getProject, createProject,
   listChanges, listByStatus, addChange, addProposal, decideProposal, markApplied, setTest,
-  exportProject, importProject, timelineHtmlPath, stampCommits, resumirCambio, getChange,
+  exportProject, importProject, timelineHtmlPath, stampCommits, resumirCambio, getChange, buscar,
   resolveProject,
 } from './lib/store.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from './lib/consejo.mjs';
@@ -173,6 +173,59 @@ server.registerTool(
 );
 
 server.registerTool(
+  'buscar',
+  {
+    title: 'Buscar en el historial sin traérselo entero',
+    description:
+      'Busca por texto en el título, el porqué, la unidad y las rutas de un proyecto, y devuelve las entradas que casan ' +
+      'con un trozo del porqué alrededor de donde casa. Úsalo en vez de list_changes cuando busques algo concreto ' +
+      '("¿dónde tocamos el candado?", "el cambio de la sesión de Odoo"): cuesta unas diez veces menos que traerse el ' +
+      'historial entero. Con el id que devuelva, get_change trae esa entrada completa.',
+    inputSchema: {
+      projectId: PROJECT_ID,
+      consulta: z.string().describe('Lo que buscas, en palabras. Las de menos de 3 letras se ignoran'),
+      limit: z.number().optional().describe('Cuántas devolver. Por defecto 5'),
+    },
+  },
+  async ({ projectId, consulta, limit }) => text(buscar(pid(projectId), consulta, { limit })),
+);
+
+server.registerTool(
+  'estado',
+  {
+    title: 'Dónde estoy y qué me reclama algo',
+    description:
+      'Lo primero al ponerte a trabajar en un repo. En una sola llamada: si está vinculado, qué hay pendiente ' +
+      '(propuestas por decidir, aceptadas sin escribir, pruebas en rojo) y qué convendría hacer con git. ' +
+      'Sustituye a llamar list_projects, list_proposals y git_advice por separado.',
+    inputSchema: { projectId: PROJECT_ID.optional().describe('El id o la ruta. Sin esto, lista los proyectos') },
+  },
+  async ({ projectId }) => {
+    if (!projectId) {
+      return text({
+        proyectos: listProjects().map((p) => ({ id: p.id, name: p.name, repoPath: p.repoPath, cambios: p.changeCount })),
+        pista: 'Pásale el id o la ruta del repo para ver qué hay pendiente en uno.',
+      });
+    }
+    const project = getProject(pid(projectId));
+    const changes = listChanges(project.id);
+    const r = aconsejar(project, changes);
+    const aceptadas = changes.filter((c) => c.status === 'accepted');
+    return text({
+      proyecto: project.id,
+      entradas: changes.filter((c) => (c.status || 'change') === 'change').length,
+      // Lo que reclama una decisión va primero y entero: es lo único que se
+      // pierde si nadie lo mira.
+      propuestasPorDecidir: changes.filter((c) => c.status === 'proposal').map((c) => ({ id: c.id, title: c.title })),
+      aceptadasSinEscribir: aceptadas.map((c) => ({ id: c.id, title: c.title })),
+      pruebasEnRojo: changes.filter((c) => c.test && c.test.status === 'failing').map((c) => c.title),
+      git: r.git ? { rama: r.git.rama, arbolLimpio: r.git.estado ? r.git.estado.limpio : null, sinEmpujar: r.git.sinEmpujar } : null,
+      consejos: r.consejos.map((c) => ({ id: c.id, titulo: c.titulo })),
+    });
+  },
+);
+
+server.registerTool(
   'get_change',
   {
     title: 'Una entrada del historial, entera',
@@ -205,35 +258,24 @@ server.registerTool(
 );
 
 server.registerTool(
-  'start_web',
+  'web',
   {
-    title: 'Levantar la web local del timeline',
+    title: 'La web local del historial',
     description:
-      'Arranca (o reutiliza si ya está corriendo) el servidor local del timeline y devuelve su URL. ' +
-      'Úsalo cuando el usuario pida "la web", "el timeline" o "levanta el servidor". Es un servidor en su máquina, no un Artifact.',
-    inputSchema: { port: z.number().optional().describe('Por defecto 4173') },
+      'Controla el servidor web donde el usuario lee y revisa el historial. accion "abrir" lo levanta (reutiliza el que ' +
+      'ya esté corriendo en vez de duplicarlo) y devuelve la URL; "estado" dice si sigue vivo; "cerrar" lo para. ' +
+      'Es lo que se usa cuando el usuario pide "la web", "el timeline" o "levanta el servidor".',
+    inputSchema: {
+      accion: z.enum(['abrir', 'estado', 'cerrar']).describe('Por defecto "abrir"').optional(),
+      port: z.number().optional(),
+      open: z.boolean().optional().describe('Abrir el navegador al levantarlo'),
+    },
   },
-  async ({ port }) => text(startWeb(port ? { port } : undefined)),
-);
-
-server.registerTool(
-  'stop_web',
-  {
-    title: 'Parar la web local del timeline',
-    description: 'Detiene el servidor local si está corriendo.',
-    inputSchema: {},
+  async ({ accion, port, open }) => {
+    if (accion === 'cerrar') return text(stopWeb());
+    if (accion === 'estado') return text(webStatus());
+    return text(await startWeb({ port, open }));
   },
-  async () => text(stopWeb()),
-);
-
-server.registerTool(
-  'web_status',
-  {
-    title: 'Ver si la web local está corriendo',
-    description: 'Comprueba si el servidor del timeline está activo y en qué puerto/URL.',
-    inputSchema: {},
-  },
-  async () => text(webStatus() || { running: false }),
 );
 
 server.registerTool(
@@ -309,50 +351,39 @@ server.registerTool(
 );
 
 server.registerTool(
-  'export_project',
+  'exchange_project',
   {
-    title: 'Exportar el historial de un proyecto',
+    title: 'Sacar o meter un historial completo',
     description:
-      'Escribe el historial completo (cambios, propuestas, descartes, notas y qué está revisado) a un fichero. ' +
-      'Formato "json" para respaldar o mover el proyecto a otra máquina (lo lee import_project); ' +
-      '"md" para leerlo o compartirlo como texto. Como data/ no se versiona, esto es la vía de respaldo.',
+      'direccion "export" escribe el historial entero a un fichero: "json" para respaldar o llevarlo a otra máquina, ' +
+      '"md" para leerlo o compartirlo. Como data/ no se versiona, esto es la vía de respaldo. ' +
+      'direccion "import" lee un json exportado: crea un proyecto nuevo, o con targetId añade a uno existente solo las ' +
+      'entradas que le falten (compara por id, así que reimportar dos veces no duplica).',
     inputSchema: {
-      projectId: PROJECT_ID,
-      format: z.enum(['json', 'md']).optional().describe('Por defecto "json"'),
-      outPath: z.string().optional().describe('Ruta absoluta del fichero a escribir. Por defecto, dentro de data/projects/<id>/'),
+      direccion: z.enum(['export', 'import']),
+      projectId: z.string().optional().describe('Al exportar, cuál. Al importar con fusión, el destino'),
+      format: z.enum(['json', 'md']).optional().describe('Solo al exportar. Por defecto json'),
+      filePath: z.string().optional().describe('Al importar, el .json. Al exportar, dónde escribirlo'),
+      repoPath: z.string().optional().describe('Al importar, la ruta del repo en ESTA máquina si difiere'),
     },
   },
-  async ({ projectId, format = 'json', outPath }) => {
-    const project = getProject(projectId);
-    const body = format === 'json'
-      ? JSON.stringify(exportProject(projectId), null, 2)
-      : renderMarkdown(project, listChanges(projectId));
-    const path = outPath
-      ? resolve(outPath)
-      : timelineHtmlPath(projectId).replace(/timeline\.html$/, `export.${format}`);
-    writeFileSync(path, body);
-    return text({ path, format, bytes: Buffer.byteLength(body) });
-  },
-);
-
-server.registerTool(
-  'import_project',
-  {
-    title: 'Importar un historial exportado',
-    description:
-      'Lee un fichero JSON de export_project. Por defecto crea un proyecto NUEVO con ese historial. ' +
-      'Con mode="merge" y targetId, añade a un proyecto existente solo las entradas que le falten (compara por id, ' +
-      'así que reimportar el mismo fichero dos veces no duplica nada).',
-    inputSchema: {
-      filePath: z.string().describe('Ruta al .json exportado'),
-      mode: z.enum(['new', 'merge']).optional().describe('Por defecto "new"'),
-      targetId: z.string().optional().describe('Obligatorio con mode="merge"'),
-      repoPath: z.string().optional().describe('Ruta del repo en ESTA máquina, si difiere de la del export'),
-    },
-  },
-  async ({ filePath, mode, targetId, repoPath }) => {
-    const bundle = JSON.parse(readFileSync(resolve(filePath), 'utf8'));
-    return text(importProject(bundle, { mode: mode || 'new', targetId, repoPath }));
+  async ({ direccion, projectId, format, filePath, repoPath }) => {
+    if (direccion === 'import') {
+      if (!filePath) throw new Error('Al importar hace falta filePath, el .json exportado.');
+      const bundle = JSON.parse(readFileSync(resolve(filePath), 'utf8'));
+      return text(importProject(bundle, {
+        mode: projectId ? 'merge' : 'new', targetId: projectId, repoPath,
+      }));
+    }
+    if (!projectId) throw new Error('Al exportar hace falta projectId.');
+    const id = pid(projectId);
+    const project = getProject(id);
+    const salida = filePath ? resolve(filePath) : join(dirname(timelineHtmlPath(id)), `historial.${format || 'json'}`);
+    const cuerpo = (format || 'json') === 'md'
+      ? renderMarkdown(project, listChanges(id))
+      : JSON.stringify(exportProject(id), null, 2);
+    writeFileSync(salida, cuerpo);
+    return text({ escrito: salida, entradas: listChanges(id).length });
   },
 );
 

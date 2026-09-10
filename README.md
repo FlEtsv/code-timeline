@@ -26,7 +26,7 @@ libro completo vive en la pestaña **Historial**, y las propuestas descartadas
 en la suya. Imprimir saca las tres, esté abierta la que esté: una pestaña es
 un estado de pantalla, no del documento.
 
-## Lo que cuesta: menos del 2%, y bajando
+## Cero coste en reposo. Menos del 1% al registrar. Y ahorra contexto después.
 
 Una herramienta que se mete entre tú y tu agente tiene que responder a esto
 antes que a nada. Y con una medida que puedas rehacer, no con una promesa:
@@ -36,23 +36,47 @@ node scripts/medir-coste.mjs
 ```
 
 Lee **tus** transcripts de Claude Code, saca el `usage` real de cada sesión y
-mide qué parte se fue en llamadas a Code Timeline. Esto es lo que sale aquí,
-sobre 19 sesiones y 8 millones de tokens de trabajo:
+mide qué parte se fue en llamadas a Code Timeline. Esta es la medida actual
+sobre **23 sesiones reales, 8.917.888 tokens de trabajo y 120 entradas**:
 
 | Si una sesión sin Code Timeline es | 100% |
 |---|---|
-| Con Code Timeline | **102,04%** |
-| Con la captura de código aplicada a todo | **100,94%** |
+| Coste histórico observado | **101,98%** |
+| Con la captura automática actual aplicada a todo | **100,93%** |
 
 Las dos filas son reales y miden cosas distintas. La primera es lo que costó de
 verdad, con el agente tecleando el código `before`/`after` a mano. La segunda es
 esa misma medida descontando ese código, que desde la versión actual **ya no se
 teclea**: se captura de `git diff`.
 
-En la sesión en la que se escribió todo esto —14 entradas, la más cargada del
-historial— el sobrecoste medido fue **+1,73%**, con la mitad de las entradas aún
-tecleadas a mano. Y en una tanda normal de 3 entradas sobre una sesión de medio
-millón de tokens, **+0,34%**.
+En números absolutos, aquellas sesiones produjeron 8.917.888 tokens de salida
+de trabajo. Code Timeline añadió 176.760; de ellos, 93.663 eran código
+`before`/`after` que la versión actual ya captura de Git. Aplicando el diseño
+actual al mismo trabajo quedan **83.097 tokens: 692 por entrada y un 0,93%**.
+
+### Medida real con Codex
+
+También se midió con procesos reales de Codex CLI, modelo `gpt-5.6-sol`, login
+mediante suscripción ChatGPT, sesiones efímeras y sandbox de solo lectura. No
+son estimaciones de caracteres: son los contadores `usage` emitidos por Codex:
+
+| Prueba | Entrada total | Entrada cacheada | Entrada no cacheada | Salida |
+|---|---:|---:|---:|---:|
+| MCP desactivado, sin herramientas | 14.374 | 10.624 | 3.750 | 8 |
+| MCP cargado, sin usarlo | 14.374 | 10.624 | 3.750 | 8 |
+| Una llamada a `estado`, catálogo completo | 62.699 | 48.704 | 13.995 | 161 |
+| Una llamada a `estado`, perfil habitual de 7 herramientas | 49.188 | 41.984 | 7.204 | 131 |
+
+**Tener Code Timeline instalado y disponible costó exactamente cero tokens
+adicionales en la prueba.** Solo consume cuota cuando Codex lo llama. Una
+llamada abre otra pasada del agente, por eso el total procesado es mayor que el
+JSON que devuelve; gran parte queda cubierta por caché. Limitar el catálogo a
+las herramientas de trabajo redujo un 66% la entrada adicional no cacheada
+(de 10.245 a 3.454 tokens sobre la sesión base).
+
+En esta máquina `codex login status` devuelve `Logged in using ChatGPT`: estas
+pruebas consumen la cuota incluida de Codex, **no generan una factura de API**.
+Con login por API sí se facturarían según los tokens y el modelo elegidos.
 
 ### Y a cambio, ahorra
 
@@ -85,9 +109,8 @@ añade, y encima cuesta menos.** Tres decisiones:
    acabas de escribir, y cualquier herramienta acepta la ruta del repo en lugar
    del id, para que no tengas que llamar a `list_projects` antes.
 
-Lo que queda son **entre 500 y 700 tokens por entrada** —dos formas
-independientes de medirlo, desde los transcripts y desde los datos guardados,
-dan 683 y 547—, y más del 80% de eso es la explicación:
+Lo que queda son **unos 692 tokens por entrada** sobre los transcripts reales,
+y más del 80% de eso es la explicación:
 el porqué del cambio. Eso no se puede capturar de ningún sitio, porque no está
 en el código — y es lo único que separa esto de un `git log`. **Lo único que
 sigues pagando es exactamente lo que compras.**
@@ -427,21 +450,55 @@ claude mcp add --scope user code-timeline -- node "$(pwd)/server.mjs"
 A partir de ahí, en cualquier sesión de Claude Code puedes decirle "vincula
 este proyecto" y que vaya registrando lo que hace.
 
+### Conectarlo a Codex
+
+Codex acepta el mismo servidor stdio. Regístralo una sola vez con la ruta
+absoluta del clon:
+
+```bash
+codex mcp add code-timeline -- node "$(pwd)/server.mjs"
+codex mcp get code-timeline
+```
+
+Para que Codex lo use continuamente —también en ejecuciones no interactivas
+con `approval=never`— confía en las herramientas de este servidor añadiendo a
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.code-timeline]
+command = "node"
+args = ["/ruta/absoluta/a/code-timeline/server.mjs"]
+default_tools_approval_mode = "approve"
+```
+
+Esta confianza se limita a `code-timeline`; no desactiva el sandbox ni cambia
+la aprobación de shell u otros MCP. Reinicia la sesión de Codex después de
+editar la configuración para que aparezcan las herramientas.
+
+El botón **Aplicar** de la web usa Claude Code por defecto. Para delegarlo en
+Codex, arranca la web así:
+
+```bash
+CODE_TIMELINE_AGENT=codex npm start
+```
+
+Se puede indicar otro ejecutable con `CODE_TIMELINE_CODEX=/ruta/a/codex`.
+
 ## El flujo, en la práctica
 
 ```
 tú:      vincula este proyecto
-Claude:  link_project(name, repoPath)  →  guarda el projectId
+agente:  link_project(name, repoPath)  →  guarda el projectId
 
-         [Claude cambia código]
-Claude:  add_change(projectId, { files: [{ file, lineStart, before, after }],
+         [el agente cambia código]
+agente:  add_change(projectId, { files: [{ file, lineStart }],
                                  unitName, title, explanation })
 
-         [Claude ve algo mejorable, pero fuera del encargo]
-Claude:  propose_change(projectId, { ... })  →  queda pendiente de tu decisión
+         [el agente ve algo mejorable, pero fuera del encargo]
+agente:  propose_change(projectId, { ... })  →  queda pendiente de tu decisión
 
 tú:      levanta el timeline
-Claude:  code-timeline serve  →  http://localhost:4173
+agente:  web({ accion: "abrir" })  →  http://localhost:4173
 ```
 
 Y ya en la web: lees en orden, marcas "revisado" y dejas notas. Las notas y las
@@ -483,21 +540,22 @@ code-timeline doctor                      diagnóstico: dónde están los datos 
 | `list_projects` | Todos los proyectos vinculados, con sus contadores |
 | `link_project` | Registra un repo. Una vez por proyecto |
 | `get_project` | Metadatos de uno |
+| `estado` | Resumen inicial: pendientes, pruebas en rojo y situación de Git |
 | `add_change` | Registra un cambio **ya aplicado**: archivos, antes/después, unidad y porqué |
 | `propose_change` | Registra una **propuesta**: código que aún no ha tocado |
 | `list_changes` | El historial en orden, **sin el código**: un 10% del coste |
+| `buscar` | Busca algo concreto sin cargar el historial entero |
 | `list_proposals` | Las pendientes, o las descartadas con su motivo |
 | `decide_proposal` | Acepta o descarta (solo si se lo pides tú) |
 | `set_test` | Registra cómo se comprueba un cambio, o que su prueba falla |
 | `mark_applied` | Confirma que una aceptada ya está escrita: pasa al historial |
-| `export_project` | Escribe el historial a JSON o Markdown |
-| `import_project` | Lee un JSON exportado: proyecto nuevo o fusión |
+| `exchange_project` | Exporta a JSON/Markdown o importa un JSON |
 | `get_change` | Una entrada entera, con su código. Para leer una sin traerse todas |
 | `render_timeline` | Exporta el `timeline.html` estático |
 | `git_advice` | Qué convendría hacer con git, con el mensaje de commit ya redactado |
 | `stamp_commits` | Apunta en cada entrada el commit que la recogió |
 | `pr_body` | Redacta el cuerpo de un PR desde las entradas de la rama |
-| `start_web` / `stop_web` / `web_status` | Controla el servidor web |
+| `web` | Abre, consulta o cierra el servidor web |
 
 La frontera entre `add_change` y `propose_change` es la que sostiene todo lo
 demás, y por eso está escrita en la descripción de las dos herramientas: una es
