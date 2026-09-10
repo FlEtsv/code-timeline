@@ -3,7 +3,9 @@ import {
   listProjects, getProject, createProject, listChanges, listByStatus,
   decideProposal, markApplied, setTest, exportProject, importProject, timelineHtmlPath,
   findProjectByRepo, recordQaRun, listQaRuns, stampCommits, syncReport, branchReport,
+  projectDataDir, esDeEquipo,
 } from '../lib/store.mjs';
+import { autorDeGit } from '../lib/git.mjs';
 import { renderTimelineHtml } from '../lib/render.mjs';
 import { aconsejar, cuerpoPr, sellosPendientes, comandoCommit } from '../lib/consejo.mjs';
 import { renderMarkdown } from '../lib/markdown.mjs';
@@ -237,6 +239,69 @@ switch (cmd) {
     } catch (err) {
       console.error(err.message);
       process.exitCode = 1;
+    }
+    break;
+  }
+
+  case 'team': {
+    // El timeline de un proyecto compartido se lleva como SU PROPIO repo git
+    // privado (no el de código — data/ sigue fuera de ese). git es el
+    // transporte; el merge driver `code-timeline` resuelve changes.json por id.
+    const sub = rest[0];
+    const id = rest[1] && !rest[1].startsWith('--') ? rest[1] : flag('repo', rest) || process.cwd();
+    try {
+      const dir = projectDataDir(id);
+      const g = (...a) => execFileSync('git', a, { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      const driver = fileURLToPath(new URL('./merge-changes.mjs', import.meta.url));
+
+      if (sub === 'init') {
+        const purl = flag('url', rest);
+        if (!purl) { console.error('Uso: code-timeline team init <projectId> --url <git-url>'); process.exit(1); }
+        if (!esDeEquipo(id)) g('init');
+        // idempotente: reescribe el remoto y la config del driver
+        try { g('remote', 'remove', 'origin'); } catch { /* no había */ }
+        g('remote', 'add', 'origin', purl);
+        g('config', 'merge.code-timeline.name', 'Code Timeline: union por id');
+        g('config', 'merge.code-timeline.driver', `node "${driver}" %O %A %B %P`);
+        writeFileSync(join(dir, '.gitattributes'), 'changes.json merge=code-timeline\nqa.json merge=code-timeline\n');
+        const ident = autorDeGit(process.cwd()) || 'code-timeline <team@code-timeline.local>';
+        const m = ident.match(/^(.*?)\s*<(.+)>$/);
+        if (m) { g('config', 'user.name', m[1]); g('config', 'user.email', m[2]); }
+        g('add', '-A');
+        try { g('-c', 'core.autocrlf=false', 'commit', '-m', 'code-timeline: init de equipo'); } catch { /* nada que commitear */ }
+        console.log(`✔ ${dir} es ahora el repo del timeline. Remoto: ${purl}`);
+        console.log('  Comparte ese repo (privado) con el equipo. Luego: code-timeline team pull / push.');
+        break;
+      }
+      if (!esDeEquipo(id)) {
+        console.error(`"${id}" no está vinculado a un equipo. Primero: code-timeline team init <id> --url <git-url>`);
+        process.exit(1);
+      }
+      if (sub === 'pull') {
+        console.log(g('pull', '--no-edit', 'origin', 'HEAD').trim() || 'ya al día');
+        break;
+      }
+      if (sub === 'push') {
+        g('add', '-A');
+        const hayCambios = g('status', '--porcelain').trim();
+        if (hayCambios) g('commit', '-m', `code-timeline: ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`);
+        const out = g('push', 'origin', 'HEAD').trim();
+        console.log(hayCambios ? 'subido' : 'nada nuevo que subir');
+        if (out) console.log(out);
+        break;
+      }
+      if (sub === 'status' || !sub) {
+        const rama = g('rev-parse', '--abbrev-ref', 'HEAD').trim();
+        const sucio = g('status', '--porcelain').trim();
+        console.log(`repo del timeline: ${dir}`);
+        console.log(`rama ${rama} · ${sucio ? sucio.split('\n').length + ' fichero(s) sin subir' : 'sin cambios locales'}`);
+        break;
+      }
+      console.error('Uso: code-timeline team <init|pull|push|status> <projectId> [--url <git-url>]');
+      process.exit(1);
+    } catch (err) {
+      console.error(err.message.split('\n')[0]);
+      process.exit(1);
     }
     break;
   }
@@ -595,6 +660,9 @@ Comandos:
   branches [<projectId>] [--fetch]      las ramas del repo: adelante/atrás de la
                                         principal, entradas del historial y commits
                                         sin registrar por rama. --fetch trae antes
+  team <init|pull|push|status> <id>    lleva el timeline de un proyecto como su
+                                        propio repo git privado, para compartirlo
+                                        con el equipo. init necesita --url
   init [--path P] [--name N]            registra el MCP en scope user, vincula el repo
                                         (el de --path, o el directorio actual) y deja un
                                         bloque de uso en su CLAUDE.md. Idempotente: cada

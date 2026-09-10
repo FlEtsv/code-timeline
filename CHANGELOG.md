@@ -118,6 +118,11 @@ publicadas: el repositorio era privado y esto es el corte con el que sale.
   posición de cada rama, si está fusionada y sus commits sin registrar; pulsar
   una filtra el historial (`?branch=`, sin JavaScript), `?fetch=1` trae del
   remoto antes. El autor y la rama se ven en cada tarjeta.
+- **`code-timeline team init|pull|push|status`** — vincular el timeline a un
+  equipo. `team init --url` lleva `data/projects/<id>/` como su propio repo git
+  privado y registra un merge driver (`bin/merge-changes.mjs`) que une
+  `changes.json` por id sin perder entradas; en colisión de una misma entrada
+  gana `updatedAt` más reciente. git puro: sin servidor, sin cuentas.
 
 ### Corregido antes del lanzamiento
 

@@ -465,6 +465,29 @@ historial a sus entradas (`/p/<id>?branch=<rama>`, funciona sin JavaScript);
 `?fetch=1` trae del remoto antes de pintar. Cada tarjeta muestra ya el autor y
 la rama.
 
+## Vincular el timeline a un equipo
+
+Un timeline puede dejar de ser solo tuyo: se lleva como **su propio repo git
+privado**, aparte del repo de código (`data/` sigue fuera de ese, a propósito).
+
+```bash
+code-timeline team init <projectId> --url git@servidor:equipo/timeline-auth.git
+code-timeline team push <projectId>     # sube tus entradas
+code-timeline team pull <projectId>     # trae las de los demás
+code-timeline team status <projectId>
+```
+
+`team init` convierte `data/projects/<id>/` en un repo git con el remoto que le
+digas y registra un **merge driver** para `changes.json`: cuando dos personas
+han registrado cosas distintas, `git` las **une por id** sin perder ninguna, y
+si las dos tocaron la MISMA entrada gana la de `updatedAt` más reciente
+(last-write-wins por entrada, sin fusión a mano). Es git puro: no hay servidor,
+ni cuentas, ni servicio hospedado. Con el campo `by` de cada entrada, cada quien
+ve quién registró qué.
+
+El aviso de siempre sobre `data/` —no versionarlo "en un repo que compartas"—
+sigue en pie: aquí el repo del timeline es **privado del equipo**, no público.
+
 ## El CLI
 
 `code-timeline sync [<projectId>] [--repo ruta] [--branch B]` informa de `N cambios sin registrar`,

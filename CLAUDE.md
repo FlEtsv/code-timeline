@@ -183,11 +183,14 @@ archivo ya no existe ahí (renombrado/borrado), cae a
   un archivo, usado por la pantalla completa al cambiar de pestaña).
 - `server.mjs` — servidor MCP (stdio, `@modelcontextprotocol/sdk`), envuelve
   `store.mjs` + `render.mjs` como herramientas.
-- `bin/cli.mjs` — CLI para el usuario: `init`, `branches`, `sync`, `serve`,
-  `projects`, `link`, `changes`, `proposals`, `decide`, `applied`, `test`,
-  `qa`, `export`, `import`, `render`, `show`, `doctor`. `branches` lista las
-  ramas del repo con entradas y huecos por rama; `sync --branch B` acota el
-  informe de huecos a una rama. `init` es el arranque en un proyecto
+- `bin/cli.mjs` — CLI para el usuario: `init`, `branches`, `sync`, `team`,
+  `serve`, `projects`, `link`, `changes`, `proposals`, `decide`, `applied`,
+  `test`, `qa`, `export`, `import`, `render`, `show`, `doctor`. `branches` lista
+  las ramas del repo con entradas y huecos por rama; `sync --branch B` acota el
+  informe de huecos a una rama. `team <init|pull|push|status>` lleva el timeline
+  de un proyecto como su propio repo git privado, para compartirlo con el
+  equipo — `bin/merge-changes.mjs` es el merge driver (unión por id,
+  last-write-wins por entrada). `init` es el arranque en un proyecto
   nuevo: registra el MCP en scope user, vincula el repo (el de `--path`, o el
   directorio actual) y deja un bloque delimitado de uso en su `CLAUDE.md`.
   Idempotente — cada uno de los tres pasos comprueba primero si ya está hecho
