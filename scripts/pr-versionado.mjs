@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, appendFileSync, writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, sep } from 'node:path';
 
 const path = resolve(process.argv[2] || (existsSync('.code-timeline/index.json') ? '.code-timeline/index.json' : '.code-timeline/history.json'));
 if (!existsSync(path)) process.exit(0);
@@ -11,7 +11,9 @@ if (data.format === 'code-timeline/versioned-v2') {
   const root = dirname(path);
   todos = (data.entries || []).map((entry) => {
     const target = resolve(root, entry.path);
-    if (!target.startsWith(`${root}/`) || !existsSync(target)) throw new Error(`Entrada versionada inválida: ${entry.path}`);
+    // Con `/` a pelo esta comprobación falla en Windows, donde resolve() devuelve
+    // rutas con `\`: el separador tiene que ser el del sistema, como en store.mjs.
+    if (!target.startsWith(`${root}${sep}`) || !existsSync(target)) throw new Error(`Entrada versionada inválida: ${entry.path}`);
     return JSON.parse(readFileSync(target, 'utf8')).change;
   });
 } else if (data.format === 'code-timeline/versioned-v1') todos = data.changes || [];
