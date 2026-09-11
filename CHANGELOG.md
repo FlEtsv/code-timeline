@@ -3,6 +3,21 @@
 Formato: [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 Versionado semántico.
 
+## [1.2.0] — 2026-09-10
+
+- `setup` instala Claude y Codex, vincula el repositorio y deja instrucciones
+  persistentes y una guardia de cobertura de Claude en un solo comando.
+- `guard` bloquea el cierre cuando hay archivos modificados sin entrada y
+  sella automáticamente las entradas que ya llegaron a un commit.
+- El almacenamiento versionado v2 usa un archivo por entrada más un índice,
+  reduciendo conflictos entre ramas y conservando compatibilidad de lectura v1.
+- Cada entrada distingue código capturado de Git, explicación del agente,
+  prueba y confirmación humana; los commits generan anclas estables.
+- El workflow actualiza un comentario propio del PR, muestra archivos sin
+  documentar y no altera comentarios de otras automatizaciones.
+- `recall` mide localmente recuperaciones antiguas, minutos ahorrados y cuántas
+  evitaron reinvestigación, sin enviar telemetría.
+
 ## [1.1.1] — 2026-09-10
 
 - Corrige la resolución de proyectos mediante rutas absolutas en Windows.

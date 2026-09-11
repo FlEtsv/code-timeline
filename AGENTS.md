@@ -36,3 +36,9 @@ cada cambio mientras todavía está fresco.
 
 Para buscar un antecedente concreto usa `buscar`; para leer su código completo,
 usa después `get_change`. Evita cargar todo el historial cuando no haga falta.
+
+<!-- code-timeline:inicio -->
+## Code Timeline
+
+Después de cada edición de código llama a `add_change` con la ruta del repositorio y los archivos tocados. Incluye el porqué y `explicaLineas` para lo que no sea obvio. Antes de terminar llama a `estado`; no des por completa la tarea si aparecen `archivosSinEntrada`.
+<!-- code-timeline:fin -->

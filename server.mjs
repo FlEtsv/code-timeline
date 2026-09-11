@@ -2,6 +2,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { cobertura } from './lib/coverage.mjs';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -80,7 +81,7 @@ server.registerTool(
       name: z.string().describe('Nombre legible del proyecto, ej. "Dashboard Inventario"'),
       repoPath: z.string().describe('Ruta absoluta al repositorio en disco'),
       githubRemote: z.string().optional().describe('URL del remoto de GitHub, si existe'),
-      storageMode: z.enum(['private', 'versioned']).optional().describe('"private" guarda fuera del repo; "versioned" espeja en .code-timeline/history.json'),
+      storageMode: z.enum(['private', 'versioned']).optional().describe('"private" guarda fuera del repo; "versioned" usa .code-timeline/index.json y un archivo por entrada'),
     },
   },
   async ({ name, repoPath, githubRemote, storageMode }) => text(createProject({ name, repoPath, githubRemote, storageMode })),
@@ -221,11 +222,8 @@ server.registerTool(
     const changes = listChanges(project.id);
     const r = aconsejar(project, changes);
     const aceptadas = changes.filter((c) => c.status === 'accepted');
-    const registrados = new Set((r.pendientes || []).flatMap((c) => (c.files || []).map((f) => f.file)));
-    const tocados = r.git && r.git.estado
-      ? [...r.git.estado.modificados, ...r.git.estado.sinSeguimiento]
-      : [];
-    const sinEntrada = tocados.filter((f) => !registrados.has(f));
+    const coberturaActual = cobertura(project, changes);
+    const sinEntrada = coberturaActual.archivosSinEntrada;
     return text({
       proyecto: project.id,
       entradas: changes.filter((c) => (c.status || 'change') === 'change').length,
